@@ -13,9 +13,21 @@ import AppKit
 class WindowManager {
     static let shared = WindowManager()
 
+    private var windowViewModels: [Int: BrowserViewModel] = [:]  // windowNumber -> viewModel
     private var windows: [NSWindow] = []
 
     private init() {}
+
+    /// Register a view model for a window (called from BrowserView)
+    func registerViewModel(_ viewModel: BrowserViewModel, for window: NSWindow) {
+        windowViewModels[window.windowNumber] = viewModel
+    }
+
+    /// Remove tab from a specific window and return it
+    func removeTabFromWindow(windowNumber: Int, tabId: UUID) -> Tab? {
+        guard let viewModel = windowViewModels[windowNumber] else { return nil }
+        return viewModel.detachTab(tabId)
+    }
 
     /// Create a new browser window with a detached tab
     func createNewWindow(with tab: Tab, at screenPoint: NSPoint) {
@@ -57,8 +69,9 @@ class WindowManager {
         // Show the window
         window.makeKeyAndOrderFront(nil)
 
-        // Keep reference
+        // Keep reference and register viewModel
         windows.append(window)
+        windowViewModels[window.windowNumber] = viewModel
 
         // Clean up closed windows
         NotificationCenter.default.addObserver(
@@ -70,6 +83,7 @@ class WindowManager {
                   let closedWindow = notification.object as? NSWindow else { return }
             Task { @MainActor [weak self] in
                 self?.windows.removeAll { $0 == closedWindow }
+                self?.windowViewModels.removeValue(forKey: closedWindow.windowNumber)
             }
         }
     }

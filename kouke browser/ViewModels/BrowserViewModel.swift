@@ -125,6 +125,28 @@ class BrowserViewModel: ObservableObject {
         tabs.insert(tab, at: newIndex)
     }
 
+    /// Insert a tab before the destination tab (used for cross-window transfers)
+    func insertTabBefore(_ tab: Tab, destinationId: UUID) {
+        guard let toIndex = tabs.firstIndex(where: { $0.id == destinationId }) else {
+            tabs.append(tab)
+            switchToTab(tab.id)
+            return
+        }
+        tabs.insert(tab, at: toIndex)
+        switchToTab(tab.id)
+    }
+
+    /// Insert a tab after the destination tab (used for cross-window transfers)
+    func insertTabAfter(_ tab: Tab, destinationId: UUID) {
+        guard let toIndex = tabs.firstIndex(where: { $0.id == destinationId }) else {
+            tabs.append(tab)
+            switchToTab(tab.id)
+            return
+        }
+        tabs.insert(tab, at: toIndex + 1)
+        switchToTab(tab.id)
+    }
+
     /// Detach a tab and return its data for creating a new window
     func detachTab(_ id: UUID) -> Tab? {
         guard tabs.count > 1,

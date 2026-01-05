@@ -727,8 +727,14 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard let source = sender.draggingSource as? DraggableTabContainerView,
-              source.tabId != tabId else {
+        // Check if it's a tab drag (either from same window or different window)
+        guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else {
+            return []
+        }
+
+        // Don't allow dropping on self
+        if let source = sender.draggingSource as? DraggableTabContainerView,
+           source.tabId == tabId {
             return []
         }
 
@@ -739,8 +745,15 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard let source = sender.draggingSource as? DraggableTabContainerView,
-              source.tabId != tabId else {
+        // Check if it's a tab drag
+        guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else {
+            hideDropIndicators()
+            return []
+        }
+
+        // Don't allow dropping on self
+        if let source = sender.draggingSource as? DraggableTabContainerView,
+           source.tabId == tabId {
             hideDropIndicators()
             return []
         }
@@ -774,7 +787,17 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         let locationInView = convert(sender.draggingLocation, from: nil)
         let dropAtEnd = locationInView.x > bounds.width / 2
 
-        reorderAction?(draggedTabId, dropAtEnd ? 1 : 0)
+        // Check if the tab is from the same window using the transfer data
+        let currentWindowNumber = self.window?.windowNumber ?? -1
+        let isSameWindow = transferData.sourceWindowId == currentWindowNumber
+
+        if isSameWindow {
+            // Same window - just reorder
+            reorderAction?(draggedTabId, dropAtEnd ? 1 : 0)
+        } else {
+            // Different window - receive tab from other window
+            receiveTabAction?(transferData, dropAtEnd ? 1 : 0)
+        }
 
         return true
     }

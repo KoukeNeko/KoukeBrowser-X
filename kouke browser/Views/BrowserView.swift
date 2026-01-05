@@ -67,13 +67,15 @@ struct BrowserView: View {
         .background(Color("Bg"))
         .ignoresSafeArea()
         .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
-        .withhostingWindow { window in
+        .withhostingWindow { [viewModel] window in
             window.backgroundColor = NSColor(named: "TitleBarBg")
             window.isMovableByWindowBackground = true
             // Disable system tab bar (we use our own)
             window.tabbingMode = .disallowed
             // Ensure window can become key
             window.makeKeyAndOrderFront(nil)
+            // Register viewModel with WindowManager for cross-window tab transfers
+            WindowManager.shared.registerViewModel(viewModel, for: window)
         }
         .onReceive(NotificationCenter.default.publisher(for: .showAllTabs)) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

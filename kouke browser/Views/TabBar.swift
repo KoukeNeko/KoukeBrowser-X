@@ -33,6 +33,9 @@ struct TabBar: View {
                                     }
                                 }
                             },
+                            onReceiveTab: { transferData, destinationId, insertAfter in
+                                receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
+                            },
                             onDetach: { tabId, screenPoint in
                                 detachTabToNewWindow(tabId: tabId, at: screenPoint)
                             },
@@ -77,6 +80,26 @@ struct TabBar: View {
 
         // Create new window with the detached tab
         WindowManager.shared.createNewWindow(with: tab, at: screenPoint)
+    }
+
+    private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
+        // Request the tab from the source window via WindowManager
+        guard let tabId = UUID(uuidString: transferData.tabId) else { return }
+
+        // Find the source window and remove the tab from it
+        if let tab = WindowManager.shared.removeTabFromWindow(
+            windowNumber: transferData.sourceWindowId,
+            tabId: tabId
+        ) {
+            // Insert into this window
+            withAnimation(.default) {
+                if insertAfter {
+                    viewModel.insertTabAfter(tab, destinationId: destinationId)
+                } else {
+                    viewModel.insertTabBefore(tab, destinationId: destinationId)
+                }
+            }
+        }
     }
 }
 
