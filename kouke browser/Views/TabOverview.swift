@@ -19,9 +19,8 @@ struct TabOverview: View {
 
     var body: some View {
         ZStack {
-            // Blurred background
+            // Solid background to fully cover content
             Color("TitleBarBg")
-                .opacity(0.95)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -112,7 +111,8 @@ struct TabThumbnailCard: View {
                         Image(nsImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(maxWidth: .infinity, maxHeight: 150)
+                            .clipped()
                     } else {
                         thumbnailPlaceholder
                     }
@@ -121,7 +121,8 @@ struct TabThumbnailCard: View {
                         Image(uiImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(maxWidth: .infinity, maxHeight: 150)
+                            .clipped()
                     } else {
                         thumbnailPlaceholder
                     }

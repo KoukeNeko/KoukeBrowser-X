@@ -59,6 +59,7 @@ struct BrowserView: View {
             // Tab Overview overlay
             if showTabOverview {
                 TabOverview(viewModel: viewModel, isPresented: $showTabOverview)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .zIndex(100)
             }
         }
