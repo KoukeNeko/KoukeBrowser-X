@@ -232,7 +232,8 @@ struct DraggableTabView: NSViewRepresentable {
     let onSelect: () -> Void
     let onClose: () -> Void
     let canClose: Bool
-    let onReorder: (UUID, UUID) -> Void
+    let onReorder: (UUID, UUID, Bool) -> Void  // (draggedTabId, destinationTabId, insertAfter)
+    let onReceiveTab: (TabTransferData, UUID, Bool) -> Void  // (transferData, destinationTabId, insertAfter)
     let onDetach: (UUID, NSPoint) -> Void
     let onDragStarted: (UUID) -> Void
     let onDragEnded: () -> Void
@@ -245,8 +246,11 @@ struct DraggableTabView: NSViewRepresentable {
             onSelect: onSelect,
             onClose: onClose,
             canClose: canClose,
-            onReorder: { draggedId, _ in
-                onReorder(draggedId, tab.id)
+            onReorder: { draggedId, insertAfter in
+                onReorder(draggedId, tab.id, insertAfter == 1)
+            },
+            onReceiveTab: { transferData, insertAfter in
+                onReceiveTab(transferData, tab.id, insertAfter == 1)
             },
             onDetach: onDetach,
             onDragStarted: onDragStarted,
@@ -273,6 +277,7 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     private var selectAction: (() -> Void)?
     private var closeAction: (() -> Void)?
     private var reorderAction: ((UUID, Int) -> Void)?
+    private var receiveTabAction: ((TabTransferData, Int) -> Void)?
     private var detachAction: ((UUID, NSPoint) -> Void)?
     private var dragStartedAction: ((UUID) -> Void)?
     private var dragEndedAction: (() -> Void)?
@@ -282,6 +287,17 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     private let dragThreshold: CGFloat = 5.0
 
     private var isHovering = false
+
+    // Drop indicator
+    private var dropIndicatorPosition: DropIndicatorPosition = .none
+    private var leftDropIndicator: NSView?
+    private var rightDropIndicator: NSView?
+
+    enum DropIndicatorPosition {
+        case none
+        case left
+        case right
+    }
 
     // UI Elements
     private var faviconView: NSImageView?
@@ -307,6 +323,7 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
 
     private func setupView() {
         wantsLayer = true
+        layer?.masksToBounds = false
         registerForDraggedTypes([.tabData])
 
         // Setup tracking area for hover
@@ -339,6 +356,25 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     }
 
     private func setupSubviews() {
+        // Drop indicators
+        let leftIndicator = NSView()
+        leftIndicator.wantsLayer = true
+        leftIndicator.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        leftIndicator.layer?.cornerRadius = 1.5
+        leftIndicator.translatesAutoresizingMaskIntoConstraints = false
+        leftIndicator.isHidden = true
+        addSubview(leftIndicator)
+        leftDropIndicator = leftIndicator
+
+        let rightIndicator = NSView()
+        rightIndicator.wantsLayer = true
+        rightIndicator.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        rightIndicator.layer?.cornerRadius = 1.5
+        rightIndicator.translatesAutoresizingMaskIntoConstraints = false
+        rightIndicator.isHidden = true
+        addSubview(rightIndicator)
+        rightDropIndicator = rightIndicator
+
         // Loading indicator
         let spinner = NSProgressIndicator()
         spinner.style = .spinning
@@ -392,6 +428,18 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         addSubview(separator)
 
         NSLayoutConstraint.activate([
+            // Left drop indicator
+            leftIndicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -1.5),
+            leftIndicator.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            leftIndicator.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            leftIndicator.widthAnchor.constraint(equalToConstant: 3),
+
+            // Right drop indicator
+            rightIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 1.5),
+            rightIndicator.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            rightIndicator.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            rightIndicator.widthAnchor.constraint(equalToConstant: 3),
+
             // Spinner
             spinner.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -434,6 +482,7 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         onClose: @escaping () -> Void,
         canClose: Bool,
         onReorder: @escaping (UUID, Int) -> Void,
+        onReceiveTab: @escaping (TabTransferData, Int) -> Void,
         onDetach: @escaping (UUID, NSPoint) -> Void,
         onDragStarted: @escaping (UUID) -> Void,
         onDragEnded: @escaping () -> Void
@@ -447,6 +496,7 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         self.selectAction = onSelect
         self.closeAction = onClose
         self.reorderAction = onReorder
+        self.receiveTabAction = onReceiveTab
         self.detachAction = onDetach
         self.dragStartedAction = onDragStarted
         self.dragEndedAction = onDragEnded
@@ -656,17 +706,62 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
 
     // MARK: - Drag Destination
 
+    private func updateDropIndicator(for location: NSPoint) {
+        let dropOnRight = location.x > bounds.width / 2
+
+        if dropOnRight {
+            leftDropIndicator?.isHidden = true
+            rightDropIndicator?.isHidden = false
+            dropIndicatorPosition = .right
+        } else {
+            leftDropIndicator?.isHidden = false
+            rightDropIndicator?.isHidden = true
+            dropIndicatorPosition = .left
+        }
+    }
+
+    private func hideDropIndicators() {
+        leftDropIndicator?.isHidden = true
+        rightDropIndicator?.isHidden = true
+        dropIndicatorPosition = .none
+    }
+
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard sender.draggingSource as? DraggableTabContainerView != nil else { return [] }
+        guard let source = sender.draggingSource as? DraggableTabContainerView,
+              source.tabId != tabId else {
+            return []
+        }
+
+        let locationInView = convert(sender.draggingLocation, from: nil)
+        updateDropIndicator(for: locationInView)
+
         return .move
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard sender.draggingSource as? DraggableTabContainerView != nil else { return [] }
+        guard let source = sender.draggingSource as? DraggableTabContainerView,
+              source.tabId != tabId else {
+            hideDropIndicators()
+            return []
+        }
+
+        let locationInView = convert(sender.draggingLocation, from: nil)
+        updateDropIndicator(for: locationInView)
+
         return .move
     }
 
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        hideDropIndicators()
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        hideDropIndicators()
+    }
+
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        hideDropIndicators()
+
         guard let data = sender.draggingPasteboard.data(forType: .tabData),
               let transferData = try? JSONDecoder().decode(TabTransferData.self, from: data),
               let draggedTabId = UUID(uuidString: transferData.tabId),

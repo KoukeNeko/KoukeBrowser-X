@@ -24,9 +24,13 @@ struct TabBar: View {
                             onSelect: { viewModel.switchToTab(tab.id) },
                             onClose: { viewModel.closeTab(tab.id) },
                             canClose: viewModel.tabs.count > 1,
-                            onReorder: { draggedId, destinationId in
+                            onReorder: { draggedId, destinationId, insertAfter in
                                 withAnimation(.default) {
-                                    viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+                                    if insertAfter {
+                                        viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
+                                    } else {
+                                        viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+                                    }
                                 }
                             },
                             onDetach: { tabId, screenPoint in

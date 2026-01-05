@@ -115,6 +115,16 @@ class BrowserViewModel: ObservableObject {
         tabs.insert(tab, at: newIndex)
     }
 
+    func moveTabAfter(draggedId: UUID, destinationId: UUID) {
+        guard draggedId != destinationId,
+              let fromIndex = tabs.firstIndex(where: { $0.id == draggedId }),
+              let toIndex = tabs.firstIndex(where: { $0.id == destinationId }) else { return }
+
+        let tab = tabs.remove(at: fromIndex)
+        let newIndex = fromIndex < toIndex ? toIndex : toIndex + 1
+        tabs.insert(tab, at: newIndex)
+    }
+
     /// Detach a tab and return its data for creating a new window
     func detachTab(_ id: UUID) -> Tab? {
         guard tabs.count > 1,
