@@ -15,21 +15,21 @@ class BrowserViewModel: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
     @Published var inputURL: String = ""
-    
+
     // WebView instances managed separately
     private var webViews: [UUID: WKWebView] = [:]
-    
+
     let settings = BrowserSettings.shared
-    
+
     private var cancellables = Set<AnyCancellable>()
-    
-    init() {
-        // Create initial tab
-        let initialTab = Tab(title: "example.com", url: "https://example.com", isLoading: true)
-        tabs = [initialTab]
-        activeTabId = initialTab.id
-        inputURL = initialTab.url
-        
+
+    init(initialTab: Tab? = nil) {
+        // Create initial tab or use provided one
+        let tab = initialTab ?? Tab(title: "example.com", url: "https://example.com", isLoading: true)
+        tabs = [tab]
+        activeTabId = tab.id
+        inputURL = tab.url
+
         // Listen for menu bar commands
         NotificationCenter.default.publisher(for: .newTab)
             .receive(on: DispatchQueue.main)
@@ -37,23 +37,22 @@ class BrowserViewModel: ObservableObject {
                 self?.addTab()
             }
             .store(in: &cancellables)
-        
     }
-    
+
     // MARK: - Computed Properties
-    
+
     var activeTab: Tab? {
         guard let id = activeTabId else { return nil }
         return tabs.first { $0.id == id }
     }
-    
+
     var activeTabIndex: Int? {
         guard let id = activeTabId else { return nil }
         return tabs.firstIndex { $0.id == id }
     }
-    
+
     // MARK: - Tab Management
-    
+
     func addTab() {
         let newTab = Tab()
         tabs.append(newTab)
@@ -66,17 +65,17 @@ class BrowserViewModel: ObservableObject {
         tabs.append(newTab)
         switchToTab(newTab.id)
     }
-    
+
     func closeTab(_ id: UUID) {
         guard tabs.count > 1 else { return }
-        
+
         if let index = tabs.firstIndex(where: { $0.id == id }) {
             // Remove webview
             webViews.removeValue(forKey: id)
-            
+
             // Remove tab
             tabs.remove(at: index)
-            
+
             // Switch to adjacent tab if closing active tab
             if activeTabId == id {
                 let newIndex = min(index, tabs.count - 1)
@@ -85,41 +84,92 @@ class BrowserViewModel: ObservableObject {
             }
         }
     }
-    
+
     func switchToTab(_ id: UUID) {
         guard let tab = tabs.first(where: { $0.id == id }) else { return }
         activeTabId = id
         inputURL = tab.url
     }
-    
+
+    func moveTab(from source: IndexSet, to destination: Int) {
+        tabs.move(fromOffsets: source, toOffset: destination)
+    }
+
+    func moveTab(withID id: UUID, to index: Int) {
+        guard let sourceIndex = tabs.firstIndex(where: { $0.id == id }) else { return }
+        // Adjust destination index if moving forward
+        let safeDestination = index > sourceIndex ? index - 1 : index
+        guard sourceIndex != safeDestination else { return }
+
+        let tab = tabs.remove(at: sourceIndex)
+        tabs.insert(tab, at: safeDestination)
+    }
+
+    func moveTabBefore(draggedId: UUID, destinationId: UUID) {
+        guard draggedId != destinationId,
+              let fromIndex = tabs.firstIndex(where: { $0.id == draggedId }),
+              let toIndex = tabs.firstIndex(where: { $0.id == destinationId }) else { return }
+
+        let tab = tabs.remove(at: fromIndex)
+        let newIndex = fromIndex < toIndex ? toIndex - 1 : toIndex
+        tabs.insert(tab, at: newIndex)
+    }
+
+    /// Detach a tab and return its data for creating a new window
+    func detachTab(_ id: UUID) -> Tab? {
+        guard tabs.count > 1,
+              let index = tabs.firstIndex(where: { $0.id == id }) else { return nil }
+
+        let tab = tabs[index]
+
+        // Remove from this window
+        webViews.removeValue(forKey: id)
+        tabs.remove(at: index)
+
+        // Switch to adjacent tab
+        if activeTabId == id {
+            let newIndex = min(index, tabs.count - 1)
+            activeTabId = tabs[newIndex].id
+            inputURL = tabs[newIndex].url
+        }
+
+        return tab
+    }
+
+    /// Add an existing tab (used when receiving a detached tab)
+    func addExistingTab(_ tab: Tab) {
+        tabs.append(tab)
+        switchToTab(tab.id)
+    }
+
     // MARK: - Navigation
-    
+
     func navigate() {
         guard let index = activeTabIndex else { return }
-        
+
         var urlString = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !urlString.isEmpty else { return }
-        
+
         // Determine if input is URL or search query
         if isLikelyURL(urlString) {
-            if !urlString.hasPrefix("http://") && 
-               !urlString.hasPrefix("https://") && 
+            if !urlString.hasPrefix("http://") &&
+               !urlString.hasPrefix("https://") &&
                !urlString.hasPrefix("about:") {
                 urlString = "https://" + urlString
             }
         } else {
             urlString = settings.getSearchURL(for: urlString)
         }
-        
+
         inputURL = urlString
-        
+
         // Update tab
         var tab = tabs[index]
         tab.url = urlString
         tab.title = extractHostname(from: urlString) ?? "New Tab"
         tab.isLoading = !tab.isSpecialPage
         tabs[index] = tab
-        
+
         // Notify webview to load
         if let webView = webViews[tab.id], !tab.isSpecialPage {
             if let url = URL(string: urlString) {
@@ -127,44 +177,44 @@ class BrowserViewModel: ObservableObject {
             }
         }
     }
-    
+
     func goBack() {
         guard let id = activeTabId, let webView = webViews[id] else { return }
         webView.goBack()
     }
-    
+
     func goForward() {
         guard let id = activeTabId, let webView = webViews[id] else { return }
         webView.goForward()
     }
-    
+
     func reload() {
         guard let id = activeTabId, let webView = webViews[id] else { return }
         webView.reload()
     }
-    
+
     func navigateFromStartPage(to url: String) {
         inputURL = url
         navigate()
     }
-    
+
     // MARK: - WebView Management
-    
+
     func registerWebView(_ webView: WKWebView, for tabId: UUID) {
         webViews[tabId] = webView
     }
-    
+
     func getWebView(for tabId: UUID) -> WKWebView? {
         return webViews[tabId]
     }
-    
+
     // MARK: - Tab State Updates (called from WebView delegates)
-    
+
     func updateTabTitle(_ title: String, for tabId: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
         tabs[index].title = title
     }
-    
+
     func updateTabURL(_ url: String, for tabId: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
         tabs[index].url = url
@@ -172,7 +222,7 @@ class BrowserViewModel: ObservableObject {
             inputURL = url
         }
     }
-    
+
     func updateTabLoadingState(_ isLoading: Bool, for tabId: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
         tabs[index].isLoading = isLoading
@@ -198,21 +248,21 @@ class BrowserViewModel: ObservableObject {
         }
     }
     #endif
-    
+
     // MARK: - Helpers
-    
+
     private func isLikelyURL(_ input: String) -> Bool {
         // Has protocol
         if input.hasPrefix("http://") || input.hasPrefix("https://") || input.hasPrefix("about:") {
             return true
         }
-        
+
         // Domain-like pattern (contains dot with valid structure)
         let pattern = "^[\\w-]+(\\.[\\w-]+)+([\\/?#].*)?$"
         if input.range(of: pattern, options: .regularExpression) != nil {
             return true
         }
-        
+
         // Localhost or IP address
         if input.hasPrefix("localhost") {
             return true
@@ -221,10 +271,10 @@ class BrowserViewModel: ObservableObject {
         if input.range(of: ipPattern, options: .regularExpression) != nil {
             return true
         }
-        
+
         return false
     }
-    
+
     private func extractHostname(from urlString: String) -> String? {
         guard let url = URL(string: urlString) else { return nil }
         return url.host
