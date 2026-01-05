@@ -217,6 +217,40 @@ class BrowserViewModel: ObservableObject {
 // MARK: - Notification Names
 
 extension Notification.Name {
+    // File menu
     static let newTab = Notification.Name("newTab")
+    static let newWindow = Notification.Name("newWindow")
+    static let closeTab = Notification.Name("closeTab")
+
+    // View menu
+    static let reloadPage = Notification.Name("reloadPage")
+    static let forceReloadPage = Notification.Name("forceReloadPage")
+    static let zoomIn = Notification.Name("zoomIn")
+    static let zoomOut = Notification.Name("zoomOut")
+    static let resetZoom = Notification.Name("resetZoom")
+    static let toggleFullScreen = Notification.Name("toggleFullScreen")
+
+    // History menu
+    static let goBack = Notification.Name("goBack")
+    static let goForward = Notification.Name("goForward")
+    static let showHistory = Notification.Name("showHistory")
+    static let clearHistory = Notification.Name("clearHistory")
+
+    // Bookmarks menu
+    static let addBookmark = Notification.Name("addBookmark")
+    static let showBookmarks = Notification.Name("showBookmarks")
+    static let bookmarkTab = Notification.Name("bookmarkTab")
+    static let bookmarkAllTabs = Notification.Name("bookmarkAllTabs")
+
+    // Developer menu
+    static let viewSource = Notification.Name("viewSource")
+    static let openDevTools = Notification.Name("openDevTools")
+    static let openConsole = Notification.Name("openConsole")
+    static let toggleJavaScript = Notification.Name("toggleJavaScript")
+    static let toggleImages = Notification.Name("toggleImages")
+    static let clearCache = Notification.Name("clearCache")
+    static let clearCookies = Notification.Name("clearCookies")
+
+    // Settings
     static let openSettings = Notification.Name("openSettings")
 }
