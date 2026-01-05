@@ -14,10 +14,10 @@ struct TabOverview: View {
     @Namespace private var animation
 
     private let columns = [
-        GridItem(.fixed(200), spacing: 20),
-        GridItem(.fixed(200), spacing: 20),
-        GridItem(.fixed(200), spacing: 20),
-        GridItem(.fixed(200), spacing: 20)
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
     ]
 
     var body: some View {
@@ -103,18 +103,73 @@ struct TabThumbnailCard: View {
     var body: some View {
         Button(action: onSelect) {
             VStack(spacing: 0) {
-                // Thumbnail area
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color("Bg"))
+                // Window Title Bar
+                HStack(spacing: 8) {
+                    // Close Button (Mac-like)
+                    if canClose {
+                        Button(action: onClose) {
+                            Circle()
+                                .fill(isHovering ? Color.red.opacity(0.8) : Color.gray.opacity(0.3))
+                                .frame(width: 12, height: 12)
+                                .overlay(
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundColor(Color.white)
+                                        .opacity(isHovering ? 1 : 0)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 4)
+                    } else {
+                         Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 12, height: 12)
+                            .padding(.leading, 4)
+                            .opacity(0) // Hidden but takes space
+                    }
 
-                    // Actual thumbnail or placeholder
+                    // Favicon & Title
+                    HStack(spacing: 4) {
+                        if let faviconURL = tab.faviconURL {
+                            AsyncImage(url: faviconURL) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                            } placeholder: {
+                                Image(systemName: "globe")
+                                    .foregroundColor(Color("TextMuted"))
+                            }
+                            .frame(width: 12, height: 12)
+                        }
+
+                        Text(tab.title)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color("Text"))
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 6)
+                .frame(height: 24)
+                .background(Color("TitleBarBg"))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color("Border").opacity(0.5)),
+                    alignment: .bottom
+                )
+
+                // Thumbnail Content
+                ZStack {
+                    Color("Bg")
+
                     #if os(macOS)
                     if let thumbnail = tab.thumbnail {
                         Image(nsImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: 150)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipped()
                     } else {
                         thumbnailPlaceholder
@@ -124,7 +179,7 @@ struct TabThumbnailCard: View {
                         Image(uiImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: 150)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipped()
                     } else {
                         thumbnailPlaceholder
@@ -133,65 +188,25 @@ struct TabThumbnailCard: View {
 
                     // Loading indicator
                     if tab.isLoading {
-                        Color.black.opacity(0.3)
+                        Color.black.opacity(0.2)
                         ProgressView()
-                            .scaleEffect(1.5)
-                    }
-
-                    // Close button (shown on hover)
-                    if canClose && isHovering {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Button(action: onClose) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.white)
-                                        .shadow(color: .black.opacity(0.3), radius: 2)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(8)
-                            }
-                            Spacer()
-                        }
+                            .scaleEffect(0.8)
                     }
                 }
-                .frame(height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isActive ? Color.accentColor : Color("Border"), lineWidth: isActive ? 3 : 1)
-                )
-
-                // Title
-                HStack(spacing: 6) {
-                    if let faviconURL = tab.faviconURL {
-                        AsyncImage(url: faviconURL) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } placeholder: {
-                            Image(systemName: "globe")
-                                .foregroundColor(Color("TextMuted"))
-                        }
-                        .frame(width: 14, height: 14)
-                    }
-
-                    Text(tab.title)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color("Text"))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
             }
+            .aspectRatio(1.5, contentMode: .fit) // Window aspect ratio
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isActive ? Color.accentColor : Color("Border"), lineWidth: isActive ? 2 : 1)
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovering = hovering
-            }
+             withAnimation(.easeInOut(duration: 0.15)) {
+                 isHovering = hovering
+             }
         }
         .scaleEffect(isHovering ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovering)
@@ -199,30 +214,19 @@ struct TabThumbnailCard: View {
 
     @ViewBuilder
     private var thumbnailPlaceholder: some View {
-        if tab.url == "about:blank" {
-            Image(systemName: "house.fill")
-                .font(.system(size: 48))
-                .foregroundColor(Color("TextMuted").opacity(0.3))
-        } else if tab.url == "about:settings" {
-            Image(systemName: "gear")
-                .font(.system(size: 48))
-                .foregroundColor(Color("TextMuted").opacity(0.3))
-        } else if let faviconURL = tab.faviconURL {
-            AsyncImage(url: faviconURL) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 48, height: 48)
-            } placeholder: {
+        Group {
+            if tab.url == "about:blank" {
+                 Image(systemName: "plus.square.dashed")
+                    .font(.system(size: 32))
+            } else if tab.url == "about:settings" {
+                Image(systemName: "gear")
+                    .font(.system(size: 32))
+            } else {
                 Image(systemName: "globe")
-                    .font(.system(size: 48))
-                    .foregroundColor(Color("TextMuted").opacity(0.3))
+                    .font(.system(size: 32))
             }
-        } else {
-            Image(systemName: "globe")
-                .font(.system(size: 48))
-                .foregroundColor(Color("TextMuted").opacity(0.3))
         }
+        .foregroundColor(Color("TextMuted").opacity(0.3))
     }
 }
 
@@ -232,27 +236,24 @@ struct NewTabCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 0) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color("Bg").opacity(0.5))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
-                                .foregroundColor(Color("Border"))
-                        )
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color("Bg").opacity(0.5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                            .foregroundColor(Color("TextMuted").opacity(0.5))
+                    )
 
+                VStack(spacing: 8) {
                     Image(systemName: "plus")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundColor(Color("TextMuted"))
+                        .font(.system(size: 24, weight: .light))
+                    Text("New Tab")
+                        .font(.system(size: 12))
                 }
-                .frame(height: 150)
-
-                Text("New Tab")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color("TextMuted"))
-                    .padding(.vertical, 8)
+                .foregroundColor(Color("TextMuted"))
             }
+            .aspectRatio(1.5, contentMode: .fit)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
