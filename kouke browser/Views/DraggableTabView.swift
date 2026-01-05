@@ -322,18 +322,20 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
+        guard bounds.contains(point) else {
+            return super.hitTest(point)
+        }
+
         // Check if the click is on the close button
-        if let closeButton = closeButton {
-            let pointInClose = closeButton.convert(point, from: self)
+        if let closeButton = closeButton, !closeButton.isHidden {
+            let pointInClose = convert(point, to: closeButton)
             if closeButton.bounds.contains(pointInClose) {
                 return closeButton
             }
         }
-        // Otherwise, handle it ourselves to prevent window dragging
-        if bounds.contains(point) {
-            return self
-        }
-        return nil
+
+        // Handle it ourselves to prevent window dragging
+        return self
     }
 
     private func setupSubviews() {
@@ -576,6 +578,11 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         window?.isMovableByWindowBackground = true
 
         dragEndedAction?()
+
+        // If the drop was handled (reorder succeeded), don't detach
+        if operation == .move {
+            return
+        }
 
         guard let tabId = tabId else { return }
 
