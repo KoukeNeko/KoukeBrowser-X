@@ -48,6 +48,7 @@ struct BrowserView: View {
                                 url: activeTab.url,
                                 viewModel: viewModel
                             )
+                            .id(activeTab.id)
                         }
                     }
                 }

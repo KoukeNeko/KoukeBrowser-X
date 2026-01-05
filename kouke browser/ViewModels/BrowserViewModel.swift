@@ -65,6 +65,13 @@ class BrowserViewModel: ObservableObject {
         tabs.append(newTab)
         switchToTab(newTab.id)
     }
+
+    func addTabWithURL(_ url: String) {
+        let title = extractHostname(from: url) ?? "New Tab"
+        let newTab = Tab(title: title, url: url, isLoading: true)
+        tabs.append(newTab)
+        switchToTab(newTab.id)
+    }
     
     func closeTab(_ id: UUID) {
         guard tabs.count > 1 else { return }

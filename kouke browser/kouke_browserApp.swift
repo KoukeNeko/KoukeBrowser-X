@@ -40,13 +40,8 @@ struct kouke_browserApp: App {
                 .keyboardShortcut("w", modifiers: .command)
             }
 
-            // Replace system View menu to remove tab-related items
+            // Replace system View menu toolbar items
             CommandGroup(replacing: .toolbar) {
-                EmptyView()
-            }
-
-            // View menu
-            CommandMenu("View") {
                 Button("Reload Page") {
                     NotificationCenter.default.post(name: .reloadPage, object: nil)
                 }

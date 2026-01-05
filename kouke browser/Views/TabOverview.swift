@@ -14,7 +14,7 @@ struct TabOverview: View {
     @Namespace private var animation
 
     private let columns = [
-        GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 20)
+        GridItem(.adaptive(minimum: 180, maximum: 220), spacing: 16)
     ]
 
     var body: some View {
