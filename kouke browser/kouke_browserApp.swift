@@ -40,6 +40,11 @@ struct kouke_browserApp: App {
                 .keyboardShortcut("w", modifiers: .command)
             }
 
+            // Replace system View menu to remove tab-related items
+            CommandGroup(replacing: .toolbar) {
+                EmptyView()
+            }
+
             // View menu
             CommandMenu("View") {
                 Button("Reload Page") {

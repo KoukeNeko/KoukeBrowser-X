@@ -59,6 +59,8 @@ struct BrowserView: View {
             window.isMovableByWindowBackground = true
             // Disable system tab bar (we use our own)
             window.tabbingMode = .disallowed
+            // Ensure window can become key
+            window.makeKeyAndOrderFront(nil)
         }
     }
 }
