@@ -57,38 +57,13 @@ struct BrowserView: View {
         .withhostingWindow { window in
             window.backgroundColor = NSColor(named: "TitleBarBg")
             window.isMovableByWindowBackground = true
-            // Adjust native traffic lights position
-            adjustTrafficLightsPosition(in: window)
+            // Disable system tab bar (we use our own)
+            window.tabbingMode = .disallowed
         }
     }
 }
 
-// Adjust native traffic lights to align with TabBar
-private func adjustTrafficLightsPosition(in window: NSWindow) {
-    let yOffset: CGFloat = -6  // Move down to center in 40px TabBar
-    let xOffset: CGFloat = 6   // Adjust horizontal position
-
-    if let closeButton = window.standardWindowButton(.closeButton) {
-        var frame = closeButton.frame
-        frame.origin.x += xOffset
-        frame.origin.y += yOffset
-        closeButton.setFrameOrigin(frame.origin)
-    }
-    if let miniaturizeButton = window.standardWindowButton(.miniaturizeButton) {
-        var frame = miniaturizeButton.frame
-        frame.origin.x += xOffset
-        frame.origin.y += yOffset
-        miniaturizeButton.setFrameOrigin(frame.origin)
-    }
-    if let zoomButton = window.standardWindowButton(.zoomButton) {
-        var frame = zoomButton.frame
-        frame.origin.x += xOffset
-        frame.origin.y += yOffset
-        zoomButton.setFrameOrigin(frame.origin)
-    }
-}
-
-// Helper to access NSWindow
+// Helper to access NSWindow and observe changes
 struct WindowAccessor: NSViewRepresentable {
     var callback: (NSWindow) -> Void
 
@@ -97,12 +72,70 @@ struct WindowAccessor: NSViewRepresentable {
         DispatchQueue.main.async {
             if let window = view.window {
                 self.callback(window)
+                // Setup traffic lights position manager
+                TrafficLightsPositionManager.shared.setup(for: window)
             }
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+// Manages traffic light positioning using NotificationCenter
+class TrafficLightsPositionManager: NSObject {
+    static let shared = TrafficLightsPositionManager()
+
+    private let leadingOffset: CGFloat = 6
+    private let topOffset: CGFloat = 6
+
+    private var observedWindows = Set<ObjectIdentifier>()
+
+    func setup(for window: NSWindow) {
+        let windowId = ObjectIdentifier(window)
+        guard !observedWindows.contains(windowId) else { return }
+        observedWindows.insert(windowId)
+
+        // Observe window resize via NotificationCenter
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidResize(_:)),
+            name: NSWindow.didResizeNotification,
+            object: window
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidExitFullScreen(_:)),
+            name: NSWindow.didExitFullScreenNotification,
+            object: window
+        )
+
+        // Apply initial offset
+        applyOffset(to: window)
+    }
+
+    @objc private func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        applyOffset(to: window)
+    }
+
+    @objc private func windowDidExitFullScreen(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        applyOffset(to: window)
+    }
+
+    private func applyOffset(to window: NSWindow) {
+        // Apply offset directly to current positions
+        window.standardWindowButton(.closeButton)?.frame.origin.x += leadingOffset
+        window.standardWindowButton(.closeButton)?.frame.origin.y -= topOffset
+
+        window.standardWindowButton(.miniaturizeButton)?.frame.origin.x += leadingOffset
+        window.standardWindowButton(.miniaturizeButton)?.frame.origin.y -= topOffset
+
+        window.standardWindowButton(.zoomButton)?.frame.origin.x += leadingOffset
+        window.standardWindowButton(.zoomButton)?.frame.origin.y -= topOffset
+    }
 }
 
 extension View {
