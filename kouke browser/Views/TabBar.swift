@@ -141,13 +141,13 @@ struct TrafficLightsView: NSViewRepresentable {
         let container = NSView()
         container.wantsLayer = true
 
-        let colors: [(NSColor, Selector)] = [
+        let buttons: [(NSColor, Selector)] = [
             (NSColor(red: 1.0, green: 0.38, blue: 0.35, alpha: 1.0), #selector(NSWindow.close)),
             (NSColor(red: 1.0, green: 0.74, blue: 0.22, alpha: 1.0), #selector(NSWindow.miniaturize(_:))),
             (NSColor(red: 0.35, green: 0.78, blue: 0.35, alpha: 1.0), #selector(NSWindow.zoom(_:)))
         ]
 
-        for (index, (color, action)) in colors.enumerated() {
+        for (index, (color, action)) in buttons.enumerated() {
             let button = TrafficLightButton(color: color, action: action)
             button.frame = NSRect(x: 14 + CGFloat(index) * 20, y: 14, width: 12, height: 12)
             container.addSubview(button)
@@ -209,7 +209,10 @@ class TrafficLightButton: NSView {
     }
 
     private func updateAppearance() {
-        if window?.isKeyWindow == true || isHovered {
+        if isHovered {
+            // Brighter color on hover
+            layer?.backgroundColor = buttonColor.blended(withFraction: 0.2, of: .white)?.cgColor
+        } else if window?.isKeyWindow == true {
             layer?.backgroundColor = buttonColor.cgColor
         } else {
             layer?.backgroundColor = NSColor.gray.withAlphaComponent(0.3).cgColor
