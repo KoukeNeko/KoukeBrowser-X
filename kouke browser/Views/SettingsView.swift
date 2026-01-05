@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var settings = BrowserSettings.shared
-    
+
     // Fixed width for the label column to align everything perfectly like Safari
     static let labelWidth: CGFloat = 160
 
@@ -19,22 +19,22 @@ struct SettingsView: View {
                 .tabItem {
                     Label("General", systemImage: "gearshape")
                 }
-            
+
             TabsSection(settings: settings)
                 .tabItem {
                     Label("Tabs", systemImage: "square.on.square")
                 }
-            
+
             SearchSection(settings: settings)
                 .tabItem {
                     Label("Search", systemImage: "magnifyingglass")
                 }
-            
+
             PrivacySection(settings: settings)
                 .tabItem {
                     Label("Privacy", systemImage: "hand.raised")
                 }
-            
+
             AdvancedSection()
                 .tabItem {
                     Label("Advanced", systemImage: "slider.horizontal.3")
@@ -63,7 +63,7 @@ struct GeneralSection: View {
                     .labelsHidden()
                     .frame(width: 200)
                 }
-                
+
                 if settings.startupBehavior == .customURL {
                     SettingsRow(label: "Homepage:") {
                         TextField("https://example.com", text: $settings.startupURL)
@@ -72,9 +72,9 @@ struct GeneralSection: View {
                     }
                 }
             }
-            
+
             Divider().padding(.vertical, 8)
-            
+
             // Appearance
             SettingsSection {
                 SettingsRow(label: "Appearance:") {
@@ -98,7 +98,7 @@ struct GeneralSection: View {
                     .frame(width: 60)
                 }
             }
-             
+
             Divider().padding(.vertical, 8)
 
             SettingsSection {
@@ -110,7 +110,7 @@ struct GeneralSection: View {
                     .labelsHidden()
                     .frame(width: 200)
                 }
-                
+
                 SettingsRow(label: "Remove download list items:") {
                      Picker("", selection: .constant("After one day")) {
                         Text("After one day").tag("After one day")
@@ -135,18 +135,21 @@ struct TabsSection: View {
     var body: some View {
          Form {
             SettingsRow(label: "Tab layout:") {
-                 Picker("", selection: .constant("Separate")) {
-                    Text("Separate").tag("Separate")
-                    Text("Compact").tag("Compact")
+                Picker("", selection: $settings.tabBarStyle) {
+                    ForEach(TabBarStyle.allCases, id: \.rawValue) { style in
+                        Text(style.displayName).tag(style)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 180)
             }
-             
-            SettingsRow(label: "", alignment: .leading) {
-                Toggle("Always show website titles in tabs", isOn: .constant(true))
-            }
+
+            Text("Normal shows a traditional tab bar with address bar below. Compact combines tabs and URL display in a single row like Safari.")
+                .font(.system(size: 11))
+                .foregroundColor(Color("TextMuted"))
+                .padding(.leading, SettingsView.labelWidth * 1.05 + 10)
+                .padding(.top, -4)
 
             Divider().padding(.vertical, 8)
 
@@ -160,12 +163,12 @@ struct TabsSection: View {
                     .labelsHidden()
                     .frame(width: 160)
                 }
-                
+
                 SettingsRow(label: "Clicking a link opens a new tab in the background:") {
                      Toggle("", isOn: .constant(false))
                         .labelsHidden()
                 }
-                 
+
                 SettingsRow(label: "Command-Click opens a link in a new tab:") {
                      Toggle("", isOn: .constant(true))
                         .labelsHidden()
@@ -192,9 +195,9 @@ struct SearchSection: View {
                 .labelsHidden()
                 .frame(width: 180)
             }
-            
+
             Divider().padding(.vertical, 8)
-            
+
             SettingsRow(label: "Search field:") {
                 VStack(alignment: .leading, spacing: 10) {
                     Toggle("Include search engine suggestions", isOn: .constant(true))
@@ -220,22 +223,22 @@ struct PrivacySection: View {
             SettingsRow(label: "Website tracking:") {
                 Toggle("Prevent cross-site tracking", isOn: .constant(true))
             }
-            
+
             SettingsRow(label: "IP address:") {
                 Toggle("Hide IP address from trackers", isOn: .constant(false))
             }
-            
+
             Divider().padding(.vertical, 8)
-            
+
             SettingsRow(label: "Cookies and website data:") {
                 VStack(alignment: .leading) {
                      Toggle("Block all cookies", isOn: .constant(false))
-                     
+
                     HStack {
                         Button("Manage Website Data...") {
                             // Action
                         }
-                        
+
                         Button("Clear History...") {
                             showingClearAlert = true
                         }
@@ -264,13 +267,13 @@ struct AdvancedSection: View {
             SettingsRow(label: "Smart Search Field:") {
                  Toggle("Show full website address", isOn: .constant(false))
             }
-            
+
             SettingsRow(label: "Accessibility:") {
                  Toggle("Never use font sizes smaller than", isOn: .constant(false))
             }
-            
+
             Divider().padding(.vertical, 8)
-            
+
             SettingsRow(label: "", alignment: .leading) {
                  Toggle("Show Develop menu in menu bar", isOn: .constant(true))
             }
@@ -283,7 +286,7 @@ struct AdvancedSection: View {
 
 struct SettingsSection<Content: View>: View {
     @ViewBuilder let content: Content
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             content
@@ -295,7 +298,7 @@ struct SettingsRow<Content: View>: View {
     let label: String
     let alignment: Alignment
     @ViewBuilder let content: Content
-    
+
     init(label: String, alignment: Alignment = .trailing, @ViewBuilder content: () -> Content) {
         self.label = label
         self.alignment = alignment
@@ -308,7 +311,7 @@ struct SettingsRow<Content: View>: View {
                 .font(.system(size: 13))
                 .frame(width: SettingsView.labelWidth * 1.05, alignment: alignment)
                 .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 3 } // Micro adjustment
-            
+
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)

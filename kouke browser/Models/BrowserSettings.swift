@@ -15,7 +15,7 @@ enum SearchEngine: String, CaseIterable {
     case bing = "bing"
     case duckduckgo = "duckduckgo"
     case yahoo = "yahoo"
-    
+
     var displayName: String {
         switch self {
         case .google: return "Google"
@@ -24,7 +24,7 @@ enum SearchEngine: String, CaseIterable {
         case .yahoo: return "Yahoo"
         }
     }
-    
+
     func searchURL(for query: String) -> String {
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         switch self {
@@ -44,7 +44,7 @@ enum StartupBehavior: String, CaseIterable {
     case startPage = "start_page"
     case lastTabs = "last_tabs"
     case customURL = "custom_url"
-    
+
     var displayName: String {
         switch self {
         case .startPage: return "Open Start Page"
@@ -57,14 +57,14 @@ enum StartupBehavior: String, CaseIterable {
 enum AppTheme: String, CaseIterable {
     case dark = "dark"
     case light = "light"
-    
+
     var displayName: String {
         switch self {
         case .dark: return "Dark"
         case .light: return "Light"
         }
     }
-    
+
     var colorScheme: ColorScheme {
         switch self {
         case .dark: return .dark
@@ -73,31 +73,47 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
+enum TabBarStyle: String, CaseIterable {
+    case normal = "normal"
+    case compact = "compact"
+
+    var displayName: String {
+        switch self {
+        case .normal: return "Normal"
+        case .compact: return "Compact"
+        }
+    }
+}
+
 class BrowserSettings: ObservableObject {
     static let shared = BrowserSettings()
-    
+
     private let defaults = UserDefaults.standard
-    
+
     @Published var theme: AppTheme {
         didSet { defaults.set(theme.rawValue, forKey: "theme") }
     }
-    
+
     @Published var fontSize: Int {
         didSet { defaults.set(fontSize, forKey: "fontSize") }
     }
-    
+
     @Published var searchEngine: SearchEngine {
         didSet { defaults.set(searchEngine.rawValue, forKey: "searchEngine") }
     }
-    
+
     @Published var startupBehavior: StartupBehavior {
         didSet { defaults.set(startupBehavior.rawValue, forKey: "startupBehavior") }
     }
-    
+
     @Published var startupURL: String {
         didSet { defaults.set(startupURL, forKey: "startupURL") }
     }
-    
+
+    @Published var tabBarStyle: TabBarStyle {
+        didSet { defaults.set(tabBarStyle.rawValue, forKey: "tabBarStyle") }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -106,31 +122,38 @@ class BrowserSettings: ObservableObject {
         } else {
             theme = .dark
         }
-        
+
         let savedFontSize = defaults.integer(forKey: "fontSize")
         fontSize = savedFontSize > 0 ? savedFontSize : 14
-        
+
         if let engineRaw = defaults.string(forKey: "searchEngine"),
            let loadedEngine = SearchEngine(rawValue: engineRaw) {
             searchEngine = loadedEngine
         } else {
             searchEngine = .google
         }
-        
+
         if let behaviorRaw = defaults.string(forKey: "startupBehavior"),
            let loadedBehavior = StartupBehavior(rawValue: behaviorRaw) {
             startupBehavior = loadedBehavior
         } else {
             startupBehavior = .startPage
         }
-        
+
         startupURL = defaults.string(forKey: "startupURL") ?? ""
+
+        if let tabBarStyleRaw = defaults.string(forKey: "tabBarStyle"),
+           let loadedTabBarStyle = TabBarStyle(rawValue: tabBarStyleRaw) {
+            tabBarStyle = loadedTabBarStyle
+        } else {
+            tabBarStyle = .normal
+        }
     }
-    
+
     func getSearchURL(for query: String) -> String {
         return searchEngine.searchURL(for: query)
     }
-    
+
     func clearBrowsingData() {
         let dataStore = WKWebsiteDataStore.default()
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()

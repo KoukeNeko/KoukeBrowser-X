@@ -132,26 +132,41 @@ class WindowManager {
 
 struct BrowserViewForWindow: View {
     @ObservedObject var viewModel: BrowserViewModel
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var showTabOverview = false
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                TabBar(viewModel: viewModel)
-                    .overlay(
-                        Rectangle()
-                            .fill(Color("Border"))
-                            .frame(height: 1),
-                        alignment: .bottom
-                    )
+                // Tab Bar - switch based on setting
+                if settings.tabBarStyle == .compact {
+                    CompactTabBar(viewModel: viewModel)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color("Border"))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
+                } else {
+                    TabBar(viewModel: viewModel)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color("Border"))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
+                }
 
-                AddressBar(viewModel: viewModel)
-                    .overlay(
-                        Rectangle()
-                            .fill(Color("Border"))
-                            .frame(height: 1),
-                        alignment: .bottom
-                    )
+                // Address Bar (only show if not compact)
+                if settings.tabBarStyle != .compact {
+                    AddressBar(viewModel: viewModel)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color("Border"))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
+                }
 
                 ZStack {
                     ForEach(viewModel.tabs) { tab in

@@ -10,29 +10,42 @@ import AppKit
 
 struct BrowserView: View {
     @StateObject private var viewModel = BrowserViewModel()
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var showTabOverview = false
 
     var body: some View {
         ZStack {
             // Main browser content
             VStack(spacing: 0) {
-                // Tab Bar
-                TabBar(viewModel: viewModel)
-                    .overlay(
-                        Rectangle()
-                            .fill(Color("Border"))
-                            .frame(height: 1),
-                        alignment: .bottom
-                    )
+                // Tab Bar - switch based on setting
+                if settings.tabBarStyle == .compact {
+                    CompactTabBar(viewModel: viewModel)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color("Border"))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
+                } else {
+                    TabBar(viewModel: viewModel)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color("Border"))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
+                }
 
-                // Address Bar
-                AddressBar(viewModel: viewModel)
-                    .overlay(
-                        Rectangle()
-                            .fill(Color("Border"))
-                            .frame(height: 1),
-                        alignment: .bottom
-                    )
+                // Address Bar (only show if not compact, since compact has URL display)
+                if settings.tabBarStyle != .compact {
+                    AddressBar(viewModel: viewModel)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color("Border"))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
+                }
 
                 // Content Area
                 ZStack {
