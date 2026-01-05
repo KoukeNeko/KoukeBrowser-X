@@ -18,6 +18,7 @@ struct kouke_browserApp: App {
         }
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
         .commands {
             // File menu
             CommandGroup(replacing: .newItem) {

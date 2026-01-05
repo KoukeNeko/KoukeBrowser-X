@@ -57,11 +57,34 @@ struct BrowserView: View {
         .withhostingWindow { window in
             window.backgroundColor = NSColor(named: "TitleBarBg")
             window.isMovableByWindowBackground = true
-            // Hide native traffic lights (we use custom ones)
-            window.standardWindowButton(.closeButton)?.isHidden = true
-            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-            window.standardWindowButton(.zoomButton)?.isHidden = true
+            // Adjust native traffic lights position
+            adjustTrafficLightsPosition(in: window)
         }
+    }
+}
+
+// Adjust native traffic lights to align with TabBar
+private func adjustTrafficLightsPosition(in window: NSWindow) {
+    let yOffset: CGFloat = -6  // Move down to center in 40px TabBar
+    let xOffset: CGFloat = 6   // Adjust horizontal position
+
+    if let closeButton = window.standardWindowButton(.closeButton) {
+        var frame = closeButton.frame
+        frame.origin.x += xOffset
+        frame.origin.y += yOffset
+        closeButton.setFrameOrigin(frame.origin)
+    }
+    if let miniaturizeButton = window.standardWindowButton(.miniaturizeButton) {
+        var frame = miniaturizeButton.frame
+        frame.origin.x += xOffset
+        frame.origin.y += yOffset
+        miniaturizeButton.setFrameOrigin(frame.origin)
+    }
+    if let zoomButton = window.standardWindowButton(.zoomButton) {
+        var frame = zoomButton.frame
+        frame.origin.x += xOffset
+        frame.origin.y += yOffset
+        zoomButton.setFrameOrigin(frame.origin)
     }
 }
 
