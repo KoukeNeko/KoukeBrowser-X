@@ -41,57 +41,62 @@ struct CompactTabBar: View {
             .padding(.trailing, 8)
 
             // Tab strip
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(viewModel.tabs) { tab in
-                        CompactDraggableTabView(
-                            tab: tab,
-                            isActive: tab.id == viewModel.activeTabId,
-                            onSelect: { viewModel.switchToTab(tab.id) },
-                            onClose: { viewModel.closeTab(tab.id) },
-                            canClose: viewModel.tabs.count > 1,
-                            onReorder: { draggedId, destinationId, insertAfter in
-                                withAnimation(.default) {
-                                    if insertAfter {
-                                        viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
-                                    } else {
-                                        viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+            GeometryReader { geometry in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        ForEach(viewModel.tabs) { tab in
+                            CompactDraggableTabView(
+                                tab: tab,
+                                isActive: tab.id == viewModel.activeTabId,
+                                onSelect: { viewModel.switchToTab(tab.id) },
+                                onClose: { viewModel.closeTab(tab.id) },
+                                canClose: viewModel.tabs.count > 1,
+                                onReorder: { draggedId, destinationId, insertAfter in
+                                    withAnimation(.default) {
+                                        if insertAfter {
+                                            viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
+                                        } else {
+                                            viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+                                        }
                                     }
-                                }
-                            },
-                            onReceiveTab: { transferData, destinationId, insertAfter in
-                                receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
-                            },
-                            onDetach: { tabId, screenPoint in
-                                detachTabToNewWindow(tabId: tabId, at: screenPoint)
-                            },
-                            onDragStarted: { id in
-                                draggedTabId = id
-                            },
-                            onDragEnded: {
-                                draggedTabId = nil
-                            },
-                            inputURL: viewModel.inputURL,
-                            onInputURLChange: { url in viewModel.inputURL = url },
-                            onNavigate: { viewModel.navigate() }
-                        )
-                        .opacity(draggedTabId == tab.id ? 0.5 : 1.0)
-                    }
+                                },
+                                onReceiveTab: { transferData, destinationId, insertAfter in
+                                    receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
+                                },
+                                onDetach: { tabId, screenPoint in
+                                    detachTabToNewWindow(tabId: tabId, at: screenPoint)
+                                },
+                                onDragStarted: { id in
+                                    draggedTabId = id
+                                },
+                                onDragEnded: {
+                                    draggedTabId = nil
+                                },
+                                inputURL: viewModel.inputURL,
+                                onInputURLChange: { url in viewModel.inputURL = url },
+                                onNavigate: { viewModel.navigate() }
+                            )
+                            .frame(width: calculateTabWidth(totalAvailableWidth: geometry.size.width - 40)) // Subtract typical button width
+                            .opacity(draggedTabId == tab.id ? 0.5 : 1.0)
+                        }
 
-                    // Add tab button
-                    Button(action: { viewModel.addTab() }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color("TextMuted"))
-                            .frame(width: 24, height: 24)
+                        // Add tab button
+                        Button(action: { viewModel.addTab() }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color("TextMuted"))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 2)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, 4)
+                    // Ensure full height to avoid clipping
+                    .frame(minWidth: geometry.size.width, alignment: .leading)
                 }
-                .padding(.horizontal, 4)
             }
 
-            Spacer()
+
         }
         .frame(height: 36)
         .background(Color("TitleBarBg"))
@@ -126,6 +131,20 @@ struct CompactTabBar: View {
                 }
             }
         }
+    }
+    
+    private func calculateTabWidth(totalAvailableWidth: CGFloat) -> CGFloat {
+        let count = CGFloat(viewModel.tabs.count)
+        guard count > 0 else { return 150 }
+        
+        let minWidth: CGFloat = 100 // Minimum width before scrolling starts
+        // let maxWidth: CGFloat = 500 // REMOVED limit
+        
+        // Spacing is 0 now
+        let availableForTabs = totalAvailableWidth 
+        let idealWidth = availableForTabs / count
+        
+        return max(minWidth, idealWidth)
     }
 }
 
@@ -234,14 +253,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     }
 
     override var intrinsicContentSize: NSSize {
-        // Compact tabs have dynamic width based on state
-        if isActive {
-            return NSSize(width: 400, height: 28) // Expanded width for active tab (address bar)
-        } else if isHovering {
-            return NSSize(width: 140, height: 28)
-        } else {
-            return NSSize(width: 32, height: 28)
-        }
+        return NSSize(width: NSView.noIntrinsicMetric, height: 28)
     }
 
     private func setupView() {
@@ -279,10 +291,17 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         // Background view
         let bg = NSView()
         bg.wantsLayer = true
-        bg.layer?.cornerRadius = 6
+        bg.layer?.cornerRadius = 0 // Sharp corners
         bg.translatesAutoresizingMaskIntoConstraints = false
         addSubview(bg)
         backgroundView = bg
+
+        // Separator line (right edge)
+        let separator = NSView()
+        separator.wantsLayer = true
+        separator.layer?.backgroundColor = NSColor(named: "Border")?.cgColor
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(separator)
 
         // Drop indicators
         let leftIndicator = NSView()
@@ -365,11 +384,17 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         closeButton = close
 
         NSLayoutConstraint.activate([
-            // Background
-            bg.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            bg.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            bg.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            bg.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            // Background - Full fill
+            bg.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bg.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bg.topAnchor.constraint(equalTo: topAnchor),
+            bg.bottomAnchor.constraint(equalTo: bottomAnchor),
+            
+            // Separator
+            separator.trailingAnchor.constraint(equalTo: trailingAnchor),
+            separator.topAnchor.constraint(equalTo: topAnchor, constant: 6), // Slight padding for separator looks better? Or full height? Normal tabs usually full or slightly padded.
+            separator.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            separator.widthAnchor.constraint(equalToConstant: 1),
 
             // Left drop indicator
             leftIndicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -1),

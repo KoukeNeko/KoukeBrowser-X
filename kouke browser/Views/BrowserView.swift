@@ -128,59 +128,90 @@ struct WindowAccessor: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-// Manages traffic light positioning using NotificationCenter
+// Manages traffic light positioning
 class TrafficLightsPositionManager: NSObject {
     static let shared = TrafficLightsPositionManager()
 
-    private let leadingOffset: CGFloat = 6
-    private let topOffset: CGFloat = 6
+    private let xOffset: CGFloat = 7
+    private let yOffset: CGFloat = 3  // Distance from top
 
     private var observedWindows = Set<ObjectIdentifier>()
+    private var displayLink: CVDisplayLink?
 
     func setup(for window: NSWindow) {
         let windowId = ObjectIdentifier(window)
         guard !observedWindows.contains(windowId) else { return }
         observedWindows.insert(windowId)
 
-        // Observe window resize via NotificationCenter
+        // Make title bar transparent so our SwiftUI view shows through
+        window.titlebarAppearsTransparent = true
+
+        // Initial position
+        positionTrafficLights(in: window)
+
+        // Use KVO to watch for layout changes on the button's superview
+        if let closeButton = window.standardWindowButton(.closeButton),
+           let titleBarView = closeButton.superview {
+            titleBarView.postsFrameChangedNotifications = true
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(titleBarFrameChanged(_:)),
+                name: NSView.frameDidChangeNotification,
+                object: titleBarView
+            )
+        }
+
+        // Also observe window state changes
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidResize(_:)),
-            name: NSWindow.didResizeNotification,
+            selector: #selector(windowDidUpdate(_:)),
+            name: NSWindow.didBecomeKeyNotification,
             object: window
         )
-
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidExitFullScreen(_:)),
+            selector: #selector(windowDidUpdate(_:)),
+            name: NSWindow.didResignKeyNotification,
+            object: window
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidUpdate(_:)),
             name: NSWindow.didExitFullScreenNotification,
             object: window
         )
-
-        // Apply initial offset
-        applyOffset(to: window)
     }
 
-    @objc private func windowDidResize(_ notification: Notification) {
+    @objc private func titleBarFrameChanged(_ notification: Notification) {
+        guard let titleBarView = notification.object as? NSView,
+              let window = titleBarView.window else { return }
+        positionTrafficLights(in: window)
+    }
+
+    @objc private func windowDidUpdate(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
-        applyOffset(to: window)
+        // Delay slightly to let system finish its layout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            self.positionTrafficLights(in: window)
+        }
     }
 
-    @objc private func windowDidExitFullScreen(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        applyOffset(to: window)
-    }
+    private func positionTrafficLights(in window: NSWindow) {
+        guard let closeButton = window.standardWindowButton(.closeButton),
+              let miniaturizeButton = window.standardWindowButton(.miniaturizeButton),
+              let zoomButton = window.standardWindowButton(.zoomButton),
+              let titleBarView = closeButton.superview else { return }
 
-    private func applyOffset(to window: NSWindow) {
-        // Apply offset directly to current positions
-        window.standardWindowButton(.closeButton)?.frame.origin.x += leadingOffset
-        window.standardWindowButton(.closeButton)?.frame.origin.y -= topOffset
+        let titleBarHeight = titleBarView.frame.height
+        let buttonHeight = closeButton.frame.height
 
-        window.standardWindowButton(.miniaturizeButton)?.frame.origin.x += leadingOffset
-        window.standardWindowButton(.miniaturizeButton)?.frame.origin.y -= topOffset
+        // Calculate Y to vertically center in title bar area (which should be ~40px for our tab bar)
+        // The title bar view might be taller due to toolbar, so we position from top
+        let y = titleBarHeight - buttonHeight - yOffset
 
-        window.standardWindowButton(.zoomButton)?.frame.origin.x += leadingOffset
-        window.standardWindowButton(.zoomButton)?.frame.origin.y -= topOffset
+        closeButton.setFrameOrigin(NSPoint(x: xOffset, y: y))
+        miniaturizeButton.setFrameOrigin(NSPoint(x: xOffset + 20, y: y))
+        zoomButton.setFrameOrigin(NSPoint(x: xOffset + 40, y: y))
     }
 }
 
