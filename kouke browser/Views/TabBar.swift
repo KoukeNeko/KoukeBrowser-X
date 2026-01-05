@@ -6,17 +6,19 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct TabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
-    
+
     var body: some View {
         HStack(spacing: 0) {
             #if os(macOS)
-            Spacer()
-                .frame(width: 80) // Space for traffic lights
+            // Custom traffic lights
+            TrafficLightsView()
+                .frame(width: 80, height: 40)
             #endif
-            
+
             // Tab strip
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
@@ -53,6 +55,10 @@ struct TabBar: View {
         }
         .frame(height: 40)
         .background(Color("TitleBarBg"))
+        #if os(macOS)
+        .gesture(WindowDragGesture())
+        .allowsWindowActivationEvents(true)
+        #endif
     }
 }
 
@@ -126,6 +132,108 @@ struct TabItem: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+// Custom traffic lights that trigger native window actions
+struct TrafficLightsView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+
+        let colors: [(NSColor, Selector)] = [
+            (NSColor(red: 1.0, green: 0.38, blue: 0.35, alpha: 1.0), #selector(NSWindow.close)),
+            (NSColor(red: 1.0, green: 0.74, blue: 0.22, alpha: 1.0), #selector(NSWindow.miniaturize(_:))),
+            (NSColor(red: 0.35, green: 0.78, blue: 0.35, alpha: 1.0), #selector(NSWindow.zoom(_:)))
+        ]
+
+        for (index, (color, action)) in colors.enumerated() {
+            let button = TrafficLightButton(color: color, action: action)
+            button.frame = NSRect(x: 14 + CGFloat(index) * 20, y: 14, width: 12, height: 12)
+            container.addSubview(button)
+        }
+
+        return container
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+class TrafficLightButton: NSView {
+    private let buttonColor: NSColor
+    private let buttonAction: Selector
+    private var isHovered = false
+    private var trackingArea: NSTrackingArea?
+
+    init(color: NSColor, action: Selector) {
+        self.buttonColor = color
+        self.buttonAction = action
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea = trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea!)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateAppearance()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateAppearance()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if let window = self.window {
+            _ = window.perform(buttonAction, with: window)
+        }
+    }
+
+    private func updateAppearance() {
+        if window?.isKeyWindow == true || isHovered {
+            layer?.backgroundColor = buttonColor.cgColor
+        } else {
+            layer?.backgroundColor = NSColor.gray.withAlphaComponent(0.3).cgColor
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(windowKeyChanged),
+            name: NSWindow.didBecomeKeyNotification, object: window
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(windowKeyChanged),
+            name: NSWindow.didResignKeyNotification, object: window
+        )
+    }
+
+    @objc private func windowKeyChanged() {
+        updateAppearance()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
 

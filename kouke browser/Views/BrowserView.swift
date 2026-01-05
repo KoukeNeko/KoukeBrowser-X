@@ -52,13 +52,15 @@ struct BrowserView: View {
             .background(Color("Bg"))
         }
         .background(Color("Bg"))
+        .ignoresSafeArea()
         .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
         .withhostingWindow { window in
-            // Make title bar transparent and content extend to top
-            window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = true
-            window.styleMask.insert(.fullSizeContentView)
             window.backgroundColor = NSColor(named: "TitleBarBg")
+            window.isMovableByWindowBackground = true
+            // Hide native traffic lights (we use custom ones)
+            window.standardWindowButton(.closeButton)?.isHidden = true
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            window.standardWindowButton(.zoomButton)?.isHidden = true
         }
     }
 }
@@ -66,7 +68,7 @@ struct BrowserView: View {
 // Helper to access NSWindow
 struct WindowAccessor: NSViewRepresentable {
     var callback: (NSWindow) -> Void
-    
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
@@ -76,7 +78,7 @@ struct WindowAccessor: NSViewRepresentable {
         }
         return view
     }
-    
+
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 

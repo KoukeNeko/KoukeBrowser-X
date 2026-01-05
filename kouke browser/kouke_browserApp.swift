@@ -17,7 +17,7 @@ struct kouke_browserApp: App {
                 .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
         }
         #if os(macOS)
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             // File menu
             CommandGroup(replacing: .newItem) {
