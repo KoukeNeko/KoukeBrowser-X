@@ -80,6 +80,13 @@ struct kouke_browserApp: App {
                     NotificationCenter.default.post(name: .toggleFullScreen, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: [.command, .control])
+
+                Divider()
+
+                Button("Show All Tabs") {
+                    NotificationCenter.default.post(name: .showAllTabs, object: nil)
+                }
+                .keyboardShortcut("\\", modifiers: [.command, .shift])
             }
 
             // History menu

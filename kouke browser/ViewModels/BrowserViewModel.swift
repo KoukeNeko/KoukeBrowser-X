@@ -181,6 +181,27 @@ class BrowserViewModel: ObservableObject {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
         tabs[index].isLoading = isLoading
     }
+
+    #if os(macOS)
+    func updateTabThumbnail(_ thumbnail: NSImage, for tabId: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[index].thumbnail = thumbnail
+    }
+
+    func captureTabThumbnail(for tabId: UUID) {
+        guard let webView = webViews[tabId] else { return }
+
+        let config = WKSnapshotConfiguration()
+        config.snapshotWidth = 300  // Reasonable thumbnail width
+
+        webView.takeSnapshot(with: config) { [weak self] image, error in
+            guard let self = self, let image = image, error == nil else { return }
+            Task { @MainActor in
+                self.updateTabThumbnail(image, for: tabId)
+            }
+        }
+    }
+    #endif
     
     // MARK: - Helpers
     
@@ -229,6 +250,7 @@ extension Notification.Name {
     static let zoomOut = Notification.Name("zoomOut")
     static let resetZoom = Notification.Name("resetZoom")
     static let toggleFullScreen = Notification.Name("toggleFullScreen")
+    static let showAllTabs = Notification.Name("showAllTabs")
 
     // History menu
     static let goBack = Notification.Name("goBack")

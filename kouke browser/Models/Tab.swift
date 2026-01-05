@@ -6,18 +6,37 @@
 //
 
 import Foundation
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 struct Tab: Identifiable, Equatable {
     let id: UUID
     var title: String
     var url: String
     var isLoading: Bool
-    
+    #if os(macOS)
+    var thumbnail: NSImage?
+    #else
+    var thumbnail: UIImage?
+    #endif
+
     init(id: UUID = UUID(), title: String = "New Tab", url: String = "about:blank", isLoading: Bool = false) {
         self.id = id
         self.title = title
         self.url = url
         self.isLoading = isLoading
+        self.thumbnail = nil
+    }
+
+    static func == (lhs: Tab, rhs: Tab) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.title == rhs.title &&
+        lhs.url == rhs.url &&
+        lhs.isLoading == rhs.isLoading
+        // Intentionally not comparing thumbnail for performance
     }
     
     /// Check if this tab is showing a special internal page

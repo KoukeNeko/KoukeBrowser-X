@@ -16,8 +16,8 @@ struct WebViewContainer: NSViewRepresentable {
     
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.preferences.javaScriptEnabled = true
-        
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+
         // JavaScript to intercept target="_blank" links
         let script = WKUserScript(
             source: """
@@ -87,13 +87,18 @@ struct WebViewContainer: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
-                
+
                 if let title = webView.title, !title.isEmpty {
                     parent.viewModel.updateTabTitle(title, for: parent.tabId)
                 }
-                
+
                 if let url = webView.url?.absoluteString {
                     parent.viewModel.updateTabURL(url, for: parent.tabId)
+                }
+
+                // Capture thumbnail after page loads with a slight delay for rendering
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.parent.viewModel.captureTabThumbnail(for: self.parent.tabId)
                 }
             }
         }
@@ -122,8 +127,8 @@ struct WebViewContainer: UIViewRepresentable {
     
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.preferences.javaScriptEnabled = true
-        
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         

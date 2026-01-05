@@ -10,46 +10,56 @@ import AppKit
 
 struct BrowserView: View {
     @StateObject private var viewModel = BrowserViewModel()
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Tab Bar
-            TabBar(viewModel: viewModel)
-                .overlay(
-                    Rectangle()
-                        .fill(Color("Border"))
-                        .frame(height: 1),
-                    alignment: .bottom
-                )
+    @State private var showTabOverview = false
 
-            // Address Bar
-            AddressBar(viewModel: viewModel)
-                .overlay(
-                    Rectangle()
-                        .fill(Color("Border"))
-                        .frame(height: 1),
-                    alignment: .bottom
-                )
-            
-            // Content Area
-            ZStack {
-                // Show active tab content
-                if let activeTab = viewModel.activeTab {
-                    if activeTab.url == "about:blank" {
-                        StartPage(onNavigate: viewModel.navigateFromStartPage)
-                    } else if activeTab.url == "about:settings" {
-                        SettingsView()
-                    } else {
-                        WebViewContainer(
-                            tabId: activeTab.id,
-                            url: activeTab.url,
-                            viewModel: viewModel
-                        )
+    var body: some View {
+        ZStack {
+            // Main browser content
+            VStack(spacing: 0) {
+                // Tab Bar
+                TabBar(viewModel: viewModel)
+                    .overlay(
+                        Rectangle()
+                            .fill(Color("Border"))
+                            .frame(height: 1),
+                        alignment: .bottom
+                    )
+
+                // Address Bar
+                AddressBar(viewModel: viewModel)
+                    .overlay(
+                        Rectangle()
+                            .fill(Color("Border"))
+                            .frame(height: 1),
+                        alignment: .bottom
+                    )
+
+                // Content Area
+                ZStack {
+                    // Show active tab content
+                    if let activeTab = viewModel.activeTab {
+                        if activeTab.url == "about:blank" {
+                            StartPage(onNavigate: viewModel.navigateFromStartPage)
+                        } else if activeTab.url == "about:settings" {
+                            SettingsView()
+                        } else {
+                            WebViewContainer(
+                                tabId: activeTab.id,
+                                url: activeTab.url,
+                                viewModel: viewModel
+                            )
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color("Bg"))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color("Bg"))
+
+            // Tab Overview overlay
+            if showTabOverview {
+                TabOverview(viewModel: viewModel, isPresented: $showTabOverview)
+                    .zIndex(100)
+            }
         }
         .background(Color("Bg"))
         .ignoresSafeArea()
@@ -61,6 +71,11 @@ struct BrowserView: View {
             window.tabbingMode = .disallowed
             // Ensure window can become key
             window.makeKeyAndOrderFront(nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showAllTabs)) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showTabOverview.toggle()
+            }
         }
     }
 }
