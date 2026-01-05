@@ -54,6 +54,12 @@ class WindowManager {
         window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 400, height: 300)
 
+        // Set window title for Dock menu display
+        window.title = tab.title
+
+        // Make window appear in Window menu and Dock
+        window.isExcludedFromWindowsMenu = false
+
         // Position window at drop location
         let windowOrigin = NSPoint(
             x: screenPoint.x - 512,  // Center horizontally
@@ -176,6 +182,11 @@ struct BrowserViewForWindow: View {
         }
         .background(Color("Bg"))
         .ignoresSafeArea()
+        .onChange(of: viewModel.activeTab?.title) { _, newTitle in
+            if let title = newTitle {
+                NSApp.keyWindow?.title = title
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .showAllTabs)) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 showTabOverview.toggle()

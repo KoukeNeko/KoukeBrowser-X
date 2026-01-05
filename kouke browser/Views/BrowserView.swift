@@ -76,6 +76,17 @@ struct BrowserView: View {
             window.makeKeyAndOrderFront(nil)
             // Register viewModel with WindowManager for cross-window tab transfers
             WindowManager.shared.registerViewModel(viewModel, for: window)
+            // Set initial window title for Dock menu
+            if let activeTab = viewModel.activeTab {
+                window.title = activeTab.title
+            }
+            // Make window appear in Window menu and Dock
+            window.isExcludedFromWindowsMenu = false
+        }
+        .onChange(of: viewModel.activeTab?.title) { _, newTitle in
+            if let title = newTitle {
+                NSApp.keyWindow?.title = title
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showAllTabs)) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
