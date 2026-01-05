@@ -10,12 +10,15 @@ import SwiftUI
 @main
 struct kouke_browserApp: App {
     @StateObject private var viewModel = BrowserViewModel()
-    
+
     var body: some Scene {
+        // Main browser window
         WindowGroup {
             ContentView()
                 .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
+                .handlesExternalEvents(preferring: Set(arrayLiteral: "main"), allowing: Set(arrayLiteral: "*"))
         }
+        .handlesExternalEvents(matching: Set(arrayLiteral: "main"))
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
@@ -169,13 +172,15 @@ struct kouke_browserApp: App {
                 }
             }
 
-            // Settings command
-            CommandGroup(after: .appSettings) {
-                Button("Settings...") {
-                    NotificationCenter.default.post(name: .openSettings, object: nil)
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
+            // Settings command handled by Settings scene
+        }
+        #endif
+
+        // Settings window (separate native window like Safari)
+        #if os(macOS)
+        Settings {
+            SettingsView()
+                .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
         }
         #endif
     }

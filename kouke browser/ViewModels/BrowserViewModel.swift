@@ -38,12 +38,6 @@ class BrowserViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        NotificationCenter.default.publisher(for: .openSettings)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.openSettings()
-            }
-            .store(in: &cancellables)
     }
     
     // MARK: - Computed Properties
@@ -151,11 +145,6 @@ class BrowserViewModel: ObservableObject {
     
     func navigateFromStartPage(to url: String) {
         inputURL = url
-        navigate()
-    }
-    
-    func openSettings() {
-        inputURL = "about:settings"
         navigate()
     }
     
@@ -280,6 +269,4 @@ extension Notification.Name {
     static let clearCache = Notification.Name("clearCache")
     static let clearCookies = Notification.Name("clearCookies")
 
-    // Settings
-    static let openSettings = Notification.Name("openSettings")
 }

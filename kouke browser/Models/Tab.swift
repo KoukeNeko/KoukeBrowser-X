@@ -41,7 +41,7 @@ struct Tab: Identifiable, Equatable {
     
     /// Check if this tab is showing a special internal page
     var isSpecialPage: Bool {
-        url == "about:blank" || url == "about:settings"
+        url == "about:blank"
     }
     
     /// Get favicon URL from Google's favicon service

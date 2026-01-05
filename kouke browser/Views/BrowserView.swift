@@ -41,8 +41,6 @@ struct BrowserView: View {
                         Group {
                             if tab.url == "about:blank" {
                                 StartPage(onNavigate: viewModel.navigateFromStartPage)
-                            } else if tab.url == "about:settings" {
-                                SettingsView()
                             } else {
                                 WebViewContainer(
                                     tabId: tab.id,

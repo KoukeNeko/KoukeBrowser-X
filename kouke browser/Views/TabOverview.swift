@@ -169,7 +169,7 @@ struct TabThumbnailCard: View {
                         Image(nsImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .clipped()
                     } else {
                         thumbnailPlaceholder
@@ -179,7 +179,7 @@ struct TabThumbnailCard: View {
                         Image(uiImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .clipped()
                     } else {
                         thumbnailPlaceholder
@@ -216,10 +216,7 @@ struct TabThumbnailCard: View {
     private var thumbnailPlaceholder: some View {
         Group {
             if tab.url == "about:blank" {
-                 Image(systemName: "plus.square.dashed")
-                    .font(.system(size: 32))
-            } else if tab.url == "about:settings" {
-                Image(systemName: "gear")
+                Image(systemName: "plus.square.dashed")
                     .font(.system(size: 32))
             } else {
                 Image(systemName: "globe")

@@ -2,197 +2,177 @@
 //  SettingsView.swift
 //  kouke browser
 //
-//  Settings page with sidebar navigation and sections.
+//  Settings page with Safari-style toolbar and layout.
 //
 
 import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var settings = BrowserSettings.shared
-    @State private var activeSection = "appearance"
     
-    private let sections: [(id: String, label: String, icon: String)] = [
-        ("appearance", "Appearance", "paintbrush.fill"),
-        ("search", "Search", "magnifyingglass"),
-        ("startup", "Startup", "power"),
-        ("privacy", "Privacy", "hand.raised.fill"),
-        ("about", "About", "info.circle.fill"),
-    ]
-    
+    // Fixed width for the label column to align everything perfectly like Safari
+    static let labelWidth: CGFloat = 160
+
     var body: some View {
-        HStack(spacing: 0) {
-            // Sidebar
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 16))
-                    Text("Settings")
-                        .font(.system(size: 18, weight: .semibold))
+        TabView {
+            GeneralSection(settings: settings)
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
                 }
-                .foregroundColor(Color("Text"))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
-                
-                ForEach(sections, id: \.id) { section in
-                    SidebarItem(
-                        label: section.label,
-                        icon: section.icon,
-                        isActive: activeSection == section.id,
-                        action: { activeSection = section.id }
-                    )
-                    .cornerRadius(4) // Minimal rounding
-                }
-                
-                Spacer()
-            }
-            .frame(width: 200)
-            .background(Color("TitleBarBg"))
             
-            // Divider
-            Rectangle()
-                .fill(Color("Border"))
-                .frame(width: 1)
-            
-            // Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    switch activeSection {
-                    case "appearance":
-                        AppearanceSection(settings: settings)
-                    case "search":
-                        SearchSection(settings: settings)
-                    case "startup":
-                        StartupSection(settings: settings)
-                    case "privacy":
-                        PrivacySection(settings: settings)
-                    case "about":
-                        AboutSection()
-                    default:
-                        EmptyView()
-                    }
+            TabsSection(settings: settings)
+                .tabItem {
+                    Label("Tabs", systemImage: "square.on.square")
                 }
-                .padding(32)
-                .frame(maxWidth: 600, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color("Bg"))
+            
+            SearchSection(settings: settings)
+                .tabItem {
+                    Label("Search", systemImage: "magnifyingglass")
+                }
+            
+            PrivacySection(settings: settings)
+                .tabItem {
+                    Label("Privacy", systemImage: "hand.raised")
+                }
+            
+            AdvancedSection()
+                .tabItem {
+                    Label("Advanced", systemImage: "slider.horizontal.3")
+                }
         }
+        .frame(width: 600) // Standard width for settings
+        .padding(20)
     }
 }
 
-// MARK: - Sidebar Item
+// MARK: - General Section
 
-struct SidebarItem: View {
-    let label: String
-    let icon: String
-    let isActive: Bool
-    let action: () -> Void
-    
-    @State private var isHovering = false
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .frame(width: 20)
-                Text(label)
-                    .font(.system(size: 14))
-                Spacer()
-                if isActive {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-            }
-            .foregroundColor(isActive ? Color("Text") : Color("TextMuted"))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                isActive ? Color("AccentHover") : 
-                isHovering ? Color("AccentHover").opacity(0.5) : Color.clear
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
-    }
-}
-
-// MARK: - Appearance Section
-
-struct AppearanceSection: View {
+struct GeneralSection: View {
     @ObservedObject var settings: BrowserSettings
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Appearance")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Color("Text"))
-            
-            // Theme
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Theme")
-                
-                HStack(spacing: 16) {
-                    ThemeButton(
-                        theme: .dark,
-                        isSelected: settings.theme == .dark,
-                        action: { settings.theme = .dark }
-                    )
-                    ThemeButton(
-                        theme: .light,
-                        isSelected: settings.theme == .light,
-                        action: { settings.theme = .light }
-                    )
+        Form {
+            // Startup
+            SettingsSection {
+                SettingsRow(label: "Safari opens with:") {
+                    Picker("", selection: $settings.startupBehavior) {
+                        ForEach(StartupBehavior.allCases, id: \.rawValue) { behavior in
+                            Text(behavior.displayName).tag(behavior)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
                 }
-            }
-            
-            // Font Size
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Font Size")
                 
-                Picker("Font Size", selection: $settings.fontSize) {
-                    ForEach([12, 13, 14, 15, 16, 18, 20, 24], id: \.self) { size in
-                        Text("\(size)px").tag(size)
+                if settings.startupBehavior == .customURL {
+                    SettingsRow(label: "Homepage:") {
+                        TextField("https://example.com", text: $settings.startupURL)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 200)
                     }
                 }
-                .pickerStyle(.menu)
-                .frame(width: 120)
+            }
+            
+            Divider().padding(.vertical, 8)
+            
+            // Appearance
+            SettingsSection {
+                SettingsRow(label: "Appearance:") {
+                    Picker("", selection: $settings.theme) {
+                        ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                            Text(theme.displayName).tag(theme)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu) // Safari uses a menu often, or segmented.
+                    .frame(width: 140)
+                }
+
+                SettingsRow(label: "Default font size:") {
+                     Picker("", selection: $settings.fontSize) {
+                        ForEach([12, 13, 14, 15, 16, 18, 20, 24], id: \.self) { size in
+                            Text("\(size)").tag(size)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 60)
+                }
+            }
+             
+            Divider().padding(.vertical, 8)
+
+            SettingsSection {
+                SettingsRow(label: "File download location:") {
+                     Picker("", selection: .constant("Downloads")) {
+                        Text("Downloads").tag("Downloads")
+                        Text("Ask for each file").tag("Ask")
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
+                
+                SettingsRow(label: "Remove download list items:") {
+                     Picker("", selection: .constant("After one day")) {
+                        Text("After one day").tag("After one day")
+                        Text("When Safari quits").tag("Quit")
+                        Text("Upon successful download").tag("Success")
+                        Text("Manually").tag("Manually")
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
             }
         }
+        .padding()
     }
 }
 
-struct ThemeButton: View {
-    let theme: AppTheme
-    let isSelected: Bool
-    let action: () -> Void
-    
+// MARK: - Tabs Section
+
+struct TabsSection: View {
+    @ObservedObject var settings: BrowserSettings
+
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(theme == .dark ? Color(white: 0.15) : Color(white: 0.96))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(white: 0.5), lineWidth: 1)
-                    )
-                    .frame(width: 80, height: 56)
-                
-                Text(theme.displayName)
-                    .font(.system(size: 14))
-                    .foregroundColor(Color("Text"))
+         Form {
+            SettingsRow(label: "Tab layout:") {
+                 Picker("", selection: .constant("Separate")) {
+                    Text("Separate").tag("Separate")
+                    Text("Compact").tag("Compact")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 180)
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color.blue : Color("Border"), lineWidth: 2)
-            )
-            .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-            .cornerRadius(6)
+             
+            SettingsRow(label: "", alignment: .leading) {
+                Toggle("Always show website titles in tabs", isOn: .constant(true))
+            }
+
+            Divider().padding(.vertical, 8)
+
+            SettingsSection {
+                SettingsRow(label: "Open pages in tabs instead of windows:") {
+                     Picker("", selection: .constant("Automatically")) {
+                        Text("Never").tag("Never")
+                        Text("Automatically").tag("Automatically")
+                        Text("Always").tag("Always")
+                    }
+                    .labelsHidden()
+                    .frame(width: 160)
+                }
+                
+                SettingsRow(label: "Clicking a link opens a new tab in the background:") {
+                     Toggle("", isOn: .constant(false))
+                        .labelsHidden()
+                }
+                 
+                SettingsRow(label: "Command-Click opens a link in a new tab:") {
+                     Toggle("", isOn: .constant(true))
+                        .labelsHidden()
+                }
+            }
         }
-        .buttonStyle(.plain)
+        .padding()
     }
 }
 
@@ -200,112 +180,32 @@ struct ThemeButton: View {
 
 struct SearchSection: View {
     @ObservedObject var settings: BrowserSettings
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Search")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Color("Text"))
-            
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Default Search Engine")
-                
-                VStack(alignment: .leading, spacing: 8) {
+        Form {
+            SettingsRow(label: "Search engine:") {
+                Picker("", selection: $settings.searchEngine) {
                     ForEach(SearchEngine.allCases, id: \.rawValue) { engine in
-                        SearchEngineRow(
-                            engine: engine,
-                            isSelected: settings.searchEngine == engine,
-                            action: { settings.searchEngine = engine }
-                        )
+                        Text(engine.displayName).tag(engine)
                     }
                 }
+                .labelsHidden()
+                .frame(width: 180)
             }
-        }
-    }
-}
-
-struct SearchEngineRow: View {
-    let engine: SearchEngine
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : Color("TextMuted"))
-                Text(engine.displayName)
-                    .foregroundColor(Color("Text"))
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Startup Section
-
-struct StartupSection: View {
-    @ObservedObject var settings: BrowserSettings
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Startup")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Color("Text"))
             
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "On Startup")
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(StartupBehavior.allCases, id: \.rawValue) { behavior in
-                        StartupRow(
-                            behavior: behavior,
-                            isSelected: settings.startupBehavior == behavior,
-                            action: { settings.startupBehavior = behavior }
-                        )
-                    }
-                }
-                
-                if settings.startupBehavior == .customURL {
-                    TextField("Enter URL", text: $settings.startupURL)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 400)
-                        .padding(.top, 8)
+            Divider().padding(.vertical, 8)
+            
+            SettingsRow(label: "Search field:") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("Include search engine suggestions", isOn: .constant(true))
+                    Toggle("Include Safari suggestions", isOn: .constant(true))
+                    Toggle("Enable Quick Website Search", isOn: .constant(true))
+                    Toggle("Preload Top Hit in the background", isOn: .constant(true))
+                    Toggle("Show Favorites", isOn: .constant(true))
                 }
             }
         }
-    }
-}
-
-struct StartupRow: View {
-    let behavior: StartupBehavior
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : Color("TextMuted"))
-                Text(behavior.displayName)
-                    .foregroundColor(Color("Text"))
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
+        .padding()
     }
 }
 
@@ -313,94 +213,108 @@ struct StartupRow: View {
 
 struct PrivacySection: View {
     @ObservedObject var settings: BrowserSettings
-    @State private var showingAlert = false
-    
+    @State private var showingClearAlert = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Privacy")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Color("Text"))
+        Form {
+            SettingsRow(label: "Website tracking:") {
+                Toggle("Prevent cross-site tracking", isOn: .constant(true))
+            }
             
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Browsing Data")
-                
-                Button(action: { showingAlert = true }) {
+            SettingsRow(label: "IP address:") {
+                Toggle("Hide IP address from trackers", isOn: .constant(false))
+            }
+            
+            Divider().padding(.vertical, 8)
+            
+            SettingsRow(label: "Cookies and website data:") {
+                VStack(alignment: .leading) {
+                     Toggle("Block all cookies", isOn: .constant(false))
+                     
                     HStack {
-                        Image(systemName: "trash")
-                        Text("Clear Browsing Data")
+                        Button("Manage Website Data...") {
+                            // Action
+                        }
+                        
+                        Button("Clear History...") {
+                            showingClearAlert = true
+                        }
                     }
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.red.opacity(0.5), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .alert("Clear Browsing Data", isPresented: $showingAlert) {
-                    Button("Cancel", role: .cancel) {}
-                    Button("Clear", role: .destructive) {
-                        settings.clearBrowsingData()
-                    }
-                } message: {
-                    Text("This will clear all browsing history, cookies, and cached data. This action cannot be undone.")
+                    .padding(.top, 4)
                 }
             }
+        }
+        .padding()
+        .alert("Clear Browsing Data", isPresented: $showingClearAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                settings.clearBrowsingData()
+            }
+        } message: {
+            Text("This will clear all browsing history, cookies, and cached data.")
         }
     }
 }
 
-// MARK: - About Section
+// MARK: - Advanced Section
 
-struct AboutSection: View {
+struct AdvancedSection: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("About")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Color("Text"))
+        Form {
+            SettingsRow(label: "Smart Search Field:") {
+                 Toggle("Show full website address", isOn: .constant(false))
+            }
             
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 16) {
-                    Image(systemName: "globe")
-                        .font(.system(size: 48))
-                        .foregroundColor(.blue)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("kouke browser")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(Color("Text"))
-                        Text("Version 1.0.0")
-                            .font(.system(size: 14))
-                            .foregroundColor(Color("TextMuted"))
-                    }
-                }
-                
-                Divider()
-                
-                Text("A lightweight, privacy-focused browser.")
-                    .font(.system(size: 14))
-                    .foregroundColor(Color("TextMuted"))
+            SettingsRow(label: "Accessibility:") {
+                 Toggle("Never use font sizes smaller than", isOn: .constant(false))
+            }
+            
+            Divider().padding(.vertical, 8)
+            
+            SettingsRow(label: "", alignment: .leading) {
+                 Toggle("Show Develop menu in menu bar", isOn: .constant(true))
             }
         }
+        .padding()
     }
 }
 
-// MARK: - Helpers
+// MARK: - Layout Helpers
 
-struct SectionHeader: View {
-    let title: String
+struct SettingsSection<Content: View>: View {
+    @ViewBuilder let content: Content
     
     var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .medium))
-            .foregroundColor(Color("TextMuted"))
-            .textCase(.uppercase)
-            .kerning(0.5)
+        VStack(alignment: .leading, spacing: 8) {
+            content
+        }
+    }
+}
+
+struct SettingsRow<Content: View>: View {
+    let label: String
+    let alignment: Alignment
+    @ViewBuilder let content: Content
+    
+    init(label: String, alignment: Alignment = .trailing, @ViewBuilder content: () -> Content) {
+        self.label = label
+        self.alignment = alignment
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .font(.system(size: 13))
+                .frame(width: SettingsView.labelWidth * 1.05, alignment: alignment)
+                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 3 } // Micro adjustment
+            
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 #Preview {
     SettingsView()
-        .frame(width: 800, height: 600)
 }
