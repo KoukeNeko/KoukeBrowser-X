@@ -36,20 +36,23 @@ struct BrowserView: View {
 
                 // Content Area
                 ZStack {
-                    // Show active tab content
-                    if let activeTab = viewModel.activeTab {
-                        if activeTab.url == "about:blank" {
-                            StartPage(onNavigate: viewModel.navigateFromStartPage)
-                        } else if activeTab.url == "about:settings" {
-                            SettingsView()
-                        } else {
-                            WebViewContainer(
-                                tabId: activeTab.id,
-                                url: activeTab.url,
-                                viewModel: viewModel
-                            )
-                            .id(activeTab.id)
+                    // Keep all WebViews alive, show/hide based on active tab
+                    ForEach(viewModel.tabs) { tab in
+                        Group {
+                            if tab.url == "about:blank" {
+                                StartPage(onNavigate: viewModel.navigateFromStartPage)
+                            } else if tab.url == "about:settings" {
+                                SettingsView()
+                            } else {
+                                WebViewContainer(
+                                    tabId: tab.id,
+                                    url: tab.url,
+                                    viewModel: viewModel
+                                )
+                            }
                         }
+                        .opacity(tab.id == viewModel.activeTabId ? 1 : 0)
+                        .zIndex(tab.id == viewModel.activeTabId ? 1 : 0)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
