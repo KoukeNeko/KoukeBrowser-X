@@ -76,10 +76,10 @@ struct TabBar: View {
     }
 
     private func detachTabToNewWindow(tabId: UUID, at screenPoint: NSPoint) {
-        guard let tab = viewModel.detachTab(tabId) else { return }
+        guard let result = viewModel.detachTab(tabId) else { return }
 
-        // Create new window with the detached tab
-        WindowManager.shared.createNewWindow(with: tab, at: screenPoint)
+        // Create new window with the detached tab and its WebView
+        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: screenPoint)
     }
 
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
@@ -87,16 +87,16 @@ struct TabBar: View {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
         // Find the source window and remove the tab from it
-        if let tab = WindowManager.shared.removeTabFromWindow(
+        if let result = WindowManager.shared.removeTabFromWindow(
             windowNumber: transferData.sourceWindowId,
             tabId: tabId
         ) {
-            // Insert into this window
+            // Insert into this window with the WebView
             withAnimation(.default) {
                 if insertAfter {
-                    viewModel.insertTabAfter(tab, destinationId: destinationId)
+                    viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
                 } else {
-                    viewModel.insertTabBefore(tab, destinationId: destinationId)
+                    viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
                 }
             }
         }

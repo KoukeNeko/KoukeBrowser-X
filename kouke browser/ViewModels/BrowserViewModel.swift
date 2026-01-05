@@ -23,12 +23,17 @@ class BrowserViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-    init(initialTab: Tab? = nil) {
+    init(initialTab: Tab? = nil, initialWebView: WKWebView? = nil) {
         // Create initial tab or use provided one
         let tab = initialTab ?? Tab(title: "example.com", url: "https://example.com", isLoading: true)
         tabs = [tab]
         activeTabId = tab.id
         inputURL = tab.url
+
+        // Register the WebView if provided
+        if let webView = initialWebView {
+            webViews[tab.id] = webView
+        }
 
         // Listen for menu bar commands
         NotificationCenter.default.publisher(for: .newTab)
@@ -126,7 +131,10 @@ class BrowserViewModel: ObservableObject {
     }
 
     /// Insert a tab before the destination tab (used for cross-window transfers)
-    func insertTabBefore(_ tab: Tab, destinationId: UUID) {
+    func insertTabBefore(_ tab: Tab, webView: WKWebView?, destinationId: UUID) {
+        if let webView = webView {
+            webViews[tab.id] = webView
+        }
         guard let toIndex = tabs.firstIndex(where: { $0.id == destinationId }) else {
             tabs.append(tab)
             switchToTab(tab.id)
@@ -137,7 +145,10 @@ class BrowserViewModel: ObservableObject {
     }
 
     /// Insert a tab after the destination tab (used for cross-window transfers)
-    func insertTabAfter(_ tab: Tab, destinationId: UUID) {
+    func insertTabAfter(_ tab: Tab, webView: WKWebView?, destinationId: UUID) {
+        if let webView = webView {
+            webViews[tab.id] = webView
+        }
         guard let toIndex = tabs.firstIndex(where: { $0.id == destinationId }) else {
             tabs.append(tab)
             switchToTab(tab.id)
@@ -147,12 +158,13 @@ class BrowserViewModel: ObservableObject {
         switchToTab(tab.id)
     }
 
-    /// Detach a tab and return its data for creating a new window
-    func detachTab(_ id: UUID) -> Tab? {
+    /// Detach a tab and return its data along with the WebView for transfer
+    func detachTab(_ id: UUID) -> (tab: Tab, webView: WKWebView?)? {
         guard tabs.count > 1,
               let index = tabs.firstIndex(where: { $0.id == id }) else { return nil }
 
         let tab = tabs[index]
+        let webView = webViews[id]
 
         // Remove from this window
         webViews.removeValue(forKey: id)
@@ -165,7 +177,7 @@ class BrowserViewModel: ObservableObject {
             inputURL = tabs[newIndex].url
         }
 
-        return tab
+        return (tab, webView)
     }
 
     /// Add an existing tab (used when receiving a detached tab)

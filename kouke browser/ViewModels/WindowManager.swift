@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import WebKit
 
 @MainActor
 class WindowManager {
@@ -23,16 +24,16 @@ class WindowManager {
         windowViewModels[window.windowNumber] = viewModel
     }
 
-    /// Remove tab from a specific window and return it
-    func removeTabFromWindow(windowNumber: Int, tabId: UUID) -> Tab? {
+    /// Remove tab from a specific window and return it along with WebView
+    func removeTabFromWindow(windowNumber: Int, tabId: UUID) -> (tab: Tab, webView: WKWebView?)? {
         guard let viewModel = windowViewModels[windowNumber] else { return nil }
         return viewModel.detachTab(tabId)
     }
 
     /// Create a new browser window with a detached tab
-    func createNewWindow(with tab: Tab, at screenPoint: NSPoint) {
-        // Create a new view model with the detached tab
-        let viewModel = BrowserViewModel(initialTab: tab)
+    func createNewWindow(with tab: Tab, webView: WKWebView? = nil, at screenPoint: NSPoint) {
+        // Create a new view model with the detached tab and its WebView
+        let viewModel = BrowserViewModel(initialTab: tab, initialWebView: webView)
 
         // Create the browser view
         let browserView = BrowserViewForWindow(viewModel: viewModel)
