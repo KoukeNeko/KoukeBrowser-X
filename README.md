@@ -92,5 +92,3 @@ This project demonstrates several key engineering implementations:
 - [ ] Implement Tab Groups.
 
 ---
-
-*Built with ❤️ by [Your Name]*
