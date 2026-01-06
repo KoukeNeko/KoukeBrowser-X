@@ -68,7 +68,7 @@ struct CompactTabBar: View {
                                 canDrag: settings.showTabsInCompactMode,
                                 onSelect: { viewModel.switchToTab(tab.id) },
                                 onClose: { viewModel.closeTab(tab.id) },
-                                canClose: viewModel.tabs.count > 1 && settings.showTabsInCompactMode,
+                                canClose: true,
                                 onReorder: { draggedId, targetId, after in
                                     if after {
                                         viewModel.moveTabAfter(draggedId: draggedId, destinationId: targetId)
@@ -171,7 +171,7 @@ struct CompactTabBar: View {
             }
         }
     }
-    
+
     private func calculateTabWidth(totalAvailableWidth: CGFloat) -> CGFloat {
         let count = CGFloat(visibleTabs.count)
         guard count > 0 else { return 150 }
@@ -528,7 +528,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             bg.trailingAnchor.constraint(equalTo: trailingAnchor),
             bg.topAnchor.constraint(equalTo: topAnchor),
             bg.bottomAnchor.constraint(equalTo: bottomAnchor),
-            
+
             // Separator
             separator.trailingAnchor.constraint(equalTo: trailingAnchor),
             separator.topAnchor.constraint(equalTo: topAnchor, constant: 6), // Slight padding for separator looks better? Or full height? Normal tabs usually full or slightly padded.
@@ -672,7 +672,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         // Show only if Active AND Editing
         let showAddress = isActive && isEditing
         addressField?.isHidden = !showAddress
-        
+
         if showAddress {
              if addressField?.currentEditor() == nil {
                  addressField?.stringValue = inputURL
