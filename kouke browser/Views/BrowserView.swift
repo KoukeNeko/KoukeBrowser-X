@@ -17,7 +17,7 @@ struct BrowserView: View {
         ZStack {
             // Main browser content
             VStack(spacing: 0) {
-                // Tab Bar - switch based on setting
+                // Tab Bar - in the titlebar area (overlay style)
                 if settings.tabBarStyle == .compact {
                     CompactTabBar(viewModel: viewModel)
                         .overlay(
@@ -36,7 +36,7 @@ struct BrowserView: View {
                         )
                 }
 
-                // Address Bar (only show if not compact, since compact has URL display)
+                // Address Bar (only show if not compact, since compact has URL display in toolbar)
                 if settings.tabBarStyle != .compact {
                     AddressBar(viewModel: viewModel)
                         .overlay(
@@ -80,7 +80,7 @@ struct BrowserView: View {
         .background(Color("Bg"))
         .ignoresSafeArea()
         .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
-        .withhostingWindow { [viewModel] window in
+        .withhostingWindow { [viewModel, settings] window in
             window.backgroundColor = NSColor(named: "TitleBarBg")
             window.isMovableByWindowBackground = true
             // Disable system tab bar (we use our own)
@@ -95,6 +95,9 @@ struct BrowserView: View {
             }
             // Make window appear in Window menu and Dock
             window.isExcludedFromWindowsMenu = false
+
+            // Setup toolbar with tab bar
+            ToolbarTabBarManager.shared.setup(for: window, viewModel: viewModel, settings: settings)
         }
         .onChange(of: viewModel.activeTab?.title) { _, newTitle in
             if let title = newTitle {
@@ -118,8 +121,6 @@ struct WindowAccessor: NSViewRepresentable {
         DispatchQueue.main.async {
             if let window = view.window {
                 self.callback(window)
-                // Setup traffic lights position manager
-                TrafficLightsPositionManager.shared.setup(for: window)
             }
         }
         return view
@@ -128,90 +129,33 @@ struct WindowAccessor: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-// Manages traffic light positioning
-class TrafficLightsPositionManager: NSObject {
-    static let shared = TrafficLightsPositionManager()
-
-    private let xOffset: CGFloat = 7
-    private let yOffset: CGFloat = 3  // Distance from top
+// Manages toolbar with overlay style
+class ToolbarTabBarManager: NSObject {
+    static let shared = ToolbarTabBarManager()
 
     private var observedWindows = Set<ObjectIdentifier>()
-    private var displayLink: CVDisplayLink?
 
-    func setup(for window: NSWindow) {
+    func setup(for window: NSWindow, viewModel: BrowserViewModel, settings: BrowserSettings) {
         let windowId = ObjectIdentifier(window)
         guard !observedWindows.contains(windowId) else { return }
         observedWindows.insert(windowId)
 
-        // Make title bar transparent so our SwiftUI view shows through
+        // Enable full size content view - content extends under titlebar
+        window.styleMask.insert(.fullSizeContentView)
+
+        // Make title bar transparent so our content shows through
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
 
-        // Initial position
-        positionTrafficLights(in: window)
+        // Add an empty toolbar - required for toolbarStyle to work
+        let toolbar = NSToolbar(identifier: "MainToolbar")
+        toolbar.showsBaselineSeparator = false
+        window.toolbar = toolbar
 
-        // Use KVO to watch for layout changes on the button's superview
-        if let closeButton = window.standardWindowButton(.closeButton),
-           let titleBarView = closeButton.superview {
-            titleBarView.postsFrameChangedNotifications = true
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(titleBarFrameChanged(_:)),
-                name: NSView.frameDidChangeNotification,
-                object: titleBarView
-            )
+        // Set toolbar style to unifiedCompact
+        if #available(macOS 11.0, *) {
+            window.toolbarStyle = .unifiedCompact
         }
-
-        // Also observe window state changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidUpdate(_:)),
-            name: NSWindow.didBecomeKeyNotification,
-            object: window
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidUpdate(_:)),
-            name: NSWindow.didResignKeyNotification,
-            object: window
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidUpdate(_:)),
-            name: NSWindow.didExitFullScreenNotification,
-            object: window
-        )
-    }
-
-    @objc private func titleBarFrameChanged(_ notification: Notification) {
-        guard let titleBarView = notification.object as? NSView,
-              let window = titleBarView.window else { return }
-        positionTrafficLights(in: window)
-    }
-
-    @objc private func windowDidUpdate(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        // Delay slightly to let system finish its layout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-            self.positionTrafficLights(in: window)
-        }
-    }
-
-    private func positionTrafficLights(in window: NSWindow) {
-        guard let closeButton = window.standardWindowButton(.closeButton),
-              let miniaturizeButton = window.standardWindowButton(.miniaturizeButton),
-              let zoomButton = window.standardWindowButton(.zoomButton),
-              let titleBarView = closeButton.superview else { return }
-
-        let titleBarHeight = titleBarView.frame.height
-        let buttonHeight = closeButton.frame.height
-
-        // Calculate Y to vertically center in title bar area (which should be ~40px for our tab bar)
-        // The title bar view might be taller due to toolbar, so we position from top
-        let y = titleBarHeight - buttonHeight - yOffset
-
-        closeButton.setFrameOrigin(NSPoint(x: xOffset, y: y))
-        miniaturizeButton.setFrameOrigin(NSPoint(x: xOffset + 20, y: y))
-        zoomButton.setFrameOrigin(NSPoint(x: xOffset + 40, y: y))
     }
 }
 
