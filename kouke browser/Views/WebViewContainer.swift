@@ -53,6 +53,8 @@ struct WebViewContainer: NSViewRepresentable {
         var parent: WebViewContainer
         private var titleObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
+        private var canGoBackObservation: NSKeyValueObservation?
+        private var canGoForwardObservation: NSKeyValueObservation?
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
@@ -61,6 +63,8 @@ struct WebViewContainer: NSViewRepresentable {
         deinit {
             titleObservation?.invalidate()
             urlObservation?.invalidate()
+            canGoBackObservation?.invalidate()
+            canGoForwardObservation?.invalidate()
         }
 
         func setupObservers(for webView: WKWebView) {
@@ -81,7 +85,25 @@ struct WebViewContainer: NSViewRepresentable {
                     if let url = webView.url?.absoluteString {
                         self.parent.viewModel.updateTabURL(url, for: self.parent.tabId)
                     }
-                    // Update navigation state when URL changes
+                }
+            }
+
+            // Observe canGoBack changes
+            canGoBackObservation = webView.observe(\.canGoBack, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.parent.viewModel.updateTabNavigationState(
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        for: self.parent.tabId
+                    )
+                }
+            }
+
+            // Observe canGoForward changes
+            canGoForwardObservation = webView.observe(\.canGoForward, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
                     self.parent.viewModel.updateTabNavigationState(
                         canGoBack: webView.canGoBack,
                         canGoForward: webView.canGoForward,
@@ -168,6 +190,8 @@ struct WebViewContainer: UIViewRepresentable {
         var parent: WebViewContainer
         private var titleObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
+        private var canGoBackObservation: NSKeyValueObservation?
+        private var canGoForwardObservation: NSKeyValueObservation?
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
@@ -176,6 +200,8 @@ struct WebViewContainer: UIViewRepresentable {
         deinit {
             titleObservation?.invalidate()
             urlObservation?.invalidate()
+            canGoBackObservation?.invalidate()
+            canGoForwardObservation?.invalidate()
         }
 
         func setupObservers(for webView: WKWebView) {
@@ -196,7 +222,25 @@ struct WebViewContainer: UIViewRepresentable {
                     if let url = webView.url?.absoluteString {
                         self.parent.viewModel.updateTabURL(url, for: self.parent.tabId)
                     }
-                    // Update navigation state when URL changes
+                }
+            }
+
+            // Observe canGoBack changes
+            canGoBackObservation = webView.observe(\.canGoBack, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.parent.viewModel.updateTabNavigationState(
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        for: self.parent.tabId
+                    )
+                }
+            }
+
+            // Observe canGoForward changes
+            canGoForwardObservation = webView.observe(\.canGoForward, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
                     self.parent.viewModel.updateTabNavigationState(
                         canGoBack: webView.canGoBack,
                         canGoForward: webView.canGoForward,

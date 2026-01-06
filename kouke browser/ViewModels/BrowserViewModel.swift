@@ -24,8 +24,25 @@ class BrowserViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init(initialTab: Tab? = nil, initialWebView: WKWebView? = nil) {
-        // Create initial tab or use provided one
-        let tab = initialTab ?? Tab(title: "example.com", url: "https://example.com", isLoading: true)
+        // Create initial tab or use provided one based on settings
+        let tab: Tab
+        if let providedTab = initialTab {
+            tab = providedTab
+        } else {
+            // Read startup behavior from settings
+            switch settings.startupBehavior {
+            case .startPage:
+                tab = Tab(title: "New Tab", url: "about:blank")
+            case .customURL:
+                let url = settings.startupURL.isEmpty ? "about:blank" : settings.startupURL
+                let title = extractHostname(from: url) ?? "New Tab"
+                tab = Tab(title: title, url: url, isLoading: !url.isEmpty && url != "about:blank")
+            case .lastTabs:
+                // TODO: Implement session restore
+                tab = Tab(title: "New Tab", url: "about:blank")
+            }
+        }
+
         tabs = [tab]
         activeTabId = tab.id
         inputURL = tab.url
