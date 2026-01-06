@@ -69,13 +69,33 @@ struct CompactTabBar: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button(action: { /* TODO: Show menu */ }) {
+                    // Tab list menu
+                    Menu {
+                        ForEach(viewModel.tabs) { tab in
+                            Button(action: { viewModel.switchToTab(tab.id) }) {
+                                HStack {
+                                    if tab.id == viewModel.activeTabId {
+                                        Image(systemName: "checkmark")
+                                    }
+                                    Text(tab.title.isEmpty ? "New Tab" : tab.title)
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        Button(action: { viewModel.addTab() }) {
+                            Label("New Tab", systemImage: "plus")
+                        }
+                    } label: {
                         Image(systemName: "line.3.horizontal")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(Color("TextMuted"))
                             .frame(width: 28, height: 28)
                     }
-                    .buttonStyle(.plain)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
                 }
                 .frame(width: 72)
                 .padding(.trailing, 8)
@@ -672,18 +692,8 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard !isDragging else { return }
-
-        let currentLocation = convert(event.locationInWindow, from: nil)
-        let distance = hypot(
-            currentLocation.x - dragStartLocation.x,
-            currentLocation.y - dragStartLocation.y
-        )
-
-        guard distance > dragThreshold else { return }
-
-        isDragging = true
-        startDragSession(with: event)
+        // Compact mode doesn't support tab dragging
+        // Users can reorder tabs via the hamburger menu
     }
 
     override func mouseUp(with event: NSEvent) {
