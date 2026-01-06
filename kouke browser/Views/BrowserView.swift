@@ -159,7 +159,6 @@ class ToolbarTabBarManager: NSObject {
 
         // Always add toolbar - it controls traffic light positioning
         let toolbar = NSToolbar(identifier: "MainToolbar")
-        toolbar.showsBaselineSeparator = false
         window.toolbar = toolbar
 
         if #available(macOS 11.0, *) {

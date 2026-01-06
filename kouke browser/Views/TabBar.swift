@@ -23,7 +23,7 @@ struct TabBar: View {
                             isActive: tab.id == viewModel.activeTabId,
                             onSelect: { viewModel.switchToTab(tab.id) },
                             onClose: { viewModel.closeTab(tab.id) },
-                            canClose: viewModel.tabs.count > 1,
+                            canClose: true,
                             onReorder: { draggedId, destinationId, insertAfter in
                                 withAnimation(.default) {
                                     if insertAfter {

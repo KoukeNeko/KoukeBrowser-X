@@ -89,7 +89,21 @@ class BrowserViewModel: ObservableObject {
     }
 
     func closeTab(_ id: UUID) {
-        guard tabs.count > 1 else { return }
+        // If this is the last tab, show confirmation dialog and close window
+        if tabs.count == 1 {
+            let alert = NSAlert()
+            alert.messageText = "Close Window?"
+            alert.informativeText = "This is the last tab. Closing it will close the window."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Close")
+            alert.addButton(withTitle: "Cancel")
+
+            if alert.runModal() == .alertFirstButtonReturn {
+                // Close the window
+                NSApp.keyWindow?.close()
+            }
+            return
+        }
 
         if let index = tabs.firstIndex(where: { $0.id == id }) {
             // Remove webview
