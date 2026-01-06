@@ -64,10 +64,11 @@ struct CompactTabBar: View {
                             CompactDraggableTabView(
                                 tab: tab,
                                 isActive: tab.id == viewModel.activeTabId,
+                                showActiveStyle: settings.showTabsInCompactMode,
                                 canDrag: settings.showTabsInCompactMode,
                                 onSelect: { viewModel.switchToTab(tab.id) },
                                 onClose: { viewModel.closeTab(tab.id) },
-                                canClose: viewModel.tabs.count > 1,
+                                canClose: viewModel.tabs.count > 1 && settings.showTabsInCompactMode,
                                 onReorder: { draggedId, targetId, after in
                                     if after {
                                         viewModel.moveTabAfter(draggedId: draggedId, destinationId: targetId)
@@ -271,6 +272,7 @@ struct CompactAddressBar: View {
 struct CompactDraggableTabView: NSViewRepresentable {
     let tab: Tab
     let isActive: Bool
+    let showActiveStyle: Bool
     let canDrag: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
@@ -289,6 +291,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
         container.configure(
             tab: tab,
             isActive: isActive,
+            showActiveStyle: showActiveStyle,
             canDrag: canDrag,
             onSelect: onSelect,
             onClose: onClose,
@@ -310,7 +313,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: CompactDraggableTabContainerView, context: Context) {
-        nsView.updateTab(tab, isActive: isActive, canClose: canClose, canDrag: canDrag, inputURL: inputURL)
+        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL)
     }
 }
 
@@ -324,6 +327,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
 
     private var currentTab: Tab?
     private var isActive: Bool = false
+    private var showActiveStyle: Bool = true
     private var canClose: Bool = true
     private var canDrag: Bool = false
     private var selectAction: (() -> Void)?
@@ -570,6 +574,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     func configure(
         tab: Tab,
         isActive: Bool,
+        showActiveStyle: Bool,
         canDrag: Bool,
         onSelect: @escaping () -> Void,
         onClose: @escaping () -> Void,
@@ -588,6 +593,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         self.tabURL = tab.url
         self.currentTab = tab
         self.isActive = isActive
+        self.showActiveStyle = showActiveStyle
         self.canClose = canClose
         self.canDrag = canDrag
         self.selectAction = onSelect
@@ -604,12 +610,13 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         updateUI()
     }
 
-    func updateTab(_ tab: Tab, isActive: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil) {
+    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil) {
         self.tabId = tab.id
         self.tabTitle = tab.title
         self.tabURL = tab.url
         self.currentTab = tab
         self.isActive = isActive
+        self.showActiveStyle = showActiveStyle
         self.canClose = canClose
         self.canDrag = canDrag
         if let input = inputURL {
@@ -627,10 +634,10 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     private func updateUI() {
         guard let tab = currentTab else { return }
 
-        // Background
-        if isActive {
+        // Background - only show active style if showActiveStyle is true
+        if isActive && showActiveStyle {
             backgroundView?.layer?.backgroundColor = NSColor(named: "TabActive")?.cgColor
-        } else if isHovering {
+        } else if isHovering && showActiveStyle {
             backgroundView?.layer?.backgroundColor = NSColor(named: "TabInactive")?.cgColor
         } else {
             backgroundView?.layer?.backgroundColor = NSColor.clear.cgColor
