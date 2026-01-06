@@ -13,7 +13,7 @@ struct WebViewContainer: NSViewRepresentable {
     let tabId: UUID
     let url: String
     @ObservedObject var viewModel: BrowserViewModel
-    
+
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -21,36 +21,74 @@ struct WebViewContainer: NSViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
-        
+
         // Dark background to match theme
         webView.setValue(false, forKey: "drawsBackground")
-        
+
         // Register with ViewModel
         Task { @MainActor in
             viewModel.registerWebView(webView, for: tabId)
         }
-        
+
+        // Add KVO observers for title and URL changes
+        context.coordinator.setupObservers(for: webView)
+
         // Load initial URL
         if let url = URL(string: url) {
             webView.load(URLRequest(url: url))
         }
-        
+
         return webView
     }
-    
+
     func updateNSView(_ webView: WKWebView, context: Context) {
         // URL changes are handled by the ViewModel
     }
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: WebViewContainer
+        private var titleObservation: NSKeyValueObservation?
+        private var urlObservation: NSKeyValueObservation?
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
+        }
+
+        deinit {
+            titleObservation?.invalidate()
+            urlObservation?.invalidate()
+        }
+
+        func setupObservers(for webView: WKWebView) {
+            // Observe title changes
+            titleObservation = webView.observe(\.title, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    if let title = webView.title, !title.isEmpty {
+                        self.parent.viewModel.updateTabTitle(title, for: self.parent.tabId)
+                    }
+                }
+            }
+
+            // Observe URL changes
+            urlObservation = webView.observe(\.url, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    if let url = webView.url?.absoluteString {
+                        self.parent.viewModel.updateTabURL(url, for: self.parent.tabId)
+                    }
+                    // Update navigation state when URL changes
+                    self.parent.viewModel.updateTabNavigationState(
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        for: self.parent.tabId
+                    )
+                }
+            }
         }
 
         // MARK: - WKNavigationDelegate
@@ -64,21 +102,7 @@ struct WebViewContainer: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
-
-                if let title = webView.title, !title.isEmpty {
-                    parent.viewModel.updateTabTitle(title, for: parent.tabId)
-                }
-
-                if let url = webView.url?.absoluteString {
-                    parent.viewModel.updateTabURL(url, for: parent.tabId)
-                }
-
-                // Update navigation state (back/forward availability)
-                parent.viewModel.updateTabNavigationState(
-                    canGoBack: webView.canGoBack,
-                    canGoForward: webView.canGoForward,
-                    for: parent.tabId
-                )
+                // Title and URL updates are now handled by KVO observers
 
                 // Capture thumbnail after page loads with a slight delay for rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -90,14 +114,6 @@ struct WebViewContainer: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
-            }
-        }
-
-        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-            Task { @MainActor in
-                if let url = webView.url?.absoluteString {
-                    parent.viewModel.updateTabURL(url, for: parent.tabId)
-                }
             }
         }
 
@@ -120,59 +136,90 @@ struct WebViewContainer: UIViewRepresentable {
     let tabId: UUID
     let url: String
     @ObservedObject var viewModel: BrowserViewModel
-    
+
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
-        
+
         Task { @MainActor in
             viewModel.registerWebView(webView, for: tabId)
         }
-        
+
+        // Add KVO observers for title and URL changes
+        context.coordinator.setupObservers(for: webView)
+
         if let url = URL(string: url) {
             webView.load(URLRequest(url: url))
         }
-        
+
         return webView
     }
-    
+
     func updateUIView(_ webView: WKWebView, context: Context) {}
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, WKNavigationDelegate {
         var parent: WebViewContainer
-        
+        private var titleObservation: NSKeyValueObservation?
+        private var urlObservation: NSKeyValueObservation?
+
         init(_ parent: WebViewContainer) {
             self.parent = parent
         }
-        
+
+        deinit {
+            titleObservation?.invalidate()
+            urlObservation?.invalidate()
+        }
+
+        func setupObservers(for webView: WKWebView) {
+            // Observe title changes
+            titleObservation = webView.observe(\.title, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    if let title = webView.title, !title.isEmpty {
+                        self.parent.viewModel.updateTabTitle(title, for: self.parent.tabId)
+                    }
+                }
+            }
+
+            // Observe URL changes
+            urlObservation = webView.observe(\.url, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    if let url = webView.url?.absoluteString {
+                        self.parent.viewModel.updateTabURL(url, for: self.parent.tabId)
+                    }
+                    // Update navigation state when URL changes
+                    self.parent.viewModel.updateTabNavigationState(
+                        canGoBack: webView.canGoBack,
+                        canGoForward: webView.canGoForward,
+                        for: self.parent.tabId
+                    )
+                }
+            }
+        }
+
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(true, for: parent.tabId)
             }
         }
-        
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
-                if let title = webView.title, !title.isEmpty {
-                    parent.viewModel.updateTabTitle(title, for: parent.tabId)
+                // Title and URL updates are now handled by KVO observers
+                // Capture thumbnail after page loads
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.parent.viewModel.captureTabThumbnail(for: self.parent.tabId)
                 }
-                if let url = webView.url?.absoluteString {
-                    parent.viewModel.updateTabURL(url, for: parent.tabId)
-                }
-                // Update navigation state
-                parent.viewModel.updateTabNavigationState(
-                    canGoBack: webView.canGoBack,
-                    canGoForward: webView.canGoForward,
-                    for: parent.tabId
-                )
             }
         }
 

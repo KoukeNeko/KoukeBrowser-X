@@ -342,6 +342,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
 
     private var isEditing = false
     private var isDragging = false
+    private var isWindowDragging = false
     private var dragStartLocation: NSPoint = .zero
     private let dragThreshold: CGFloat = 5.0
 
@@ -562,8 +563,8 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             close.heightAnchor.constraint(equalToConstant: 14),
         ])
 
-        // Width constraint for title (will be animated)
-        titleWidthConstraint = title.widthAnchor.constraint(equalToConstant: 0)
+        // Width constraint for title - use large max value, trailing constraint will limit actual size
+        titleWidthConstraint = title.widthAnchor.constraint(lessThanOrEqualToConstant: 500)
         titleWidthConstraint?.isActive = true
     }
 
@@ -652,7 +653,6 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         // 1. Inactive & Hovering
         // 2. Active & Not Editing
         let shouldShowTitle = (!isActive && isHovering) || (isActive && !isEditing)
-        titleWidthConstraint?.constant = shouldShowTitle ? 80 : 0
         titleLabel?.isHidden = !shouldShowTitle
 
         // Address Field
@@ -734,14 +734,11 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     override func mouseDown(with event: NSEvent) {
         dragStartLocation = convert(event.locationInWindow, from: nil)
         isDragging = false
+        isWindowDragging = false
         window?.isMovableByWindowBackground = false
     }
 
     override func mouseDragged(with event: NSEvent) {
-        // Only allow dragging when showTabsInCompactMode is enabled
-        guard canDrag else { return }
-        guard !isDragging else { return }
-
         let currentLocation = convert(event.locationInWindow, from: nil)
         let distance = hypot(
             currentLocation.x - dragStartLocation.x,
@@ -750,12 +747,31 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
 
         guard distance > dragThreshold else { return }
 
-        isDragging = true
-        startDragSession(with: event)
+        if !canDrag {
+            // Window dragging mode - move window manually
+            isWindowDragging = true
+            if let window = self.window {
+                var frame = window.frame
+                frame.origin.x += event.deltaX
+                frame.origin.y -= event.deltaY
+                window.setFrame(frame, display: true)
+            }
+        } else {
+            // Tab reordering mode
+            guard !isDragging else { return }
+            isDragging = true
+            startDragSession(with: event)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
         window?.isMovableByWindowBackground = true
+
+        // Skip edit mode if we just finished a window drag
+        if isWindowDragging {
+            isWindowDragging = false
+            return
+        }
 
         if !isDragging {
             if isActive {
