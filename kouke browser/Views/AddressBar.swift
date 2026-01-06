@@ -10,13 +10,21 @@ import SwiftUI
 struct AddressBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @FocusState private var isAddressFocused: Bool
-    
+
     var body: some View {
         HStack(spacing: 12) {
             // Navigation controls
             HStack(spacing: 4) {
-                NavButton(icon: "chevron.left", action: viewModel.goBack)
-                NavButton(icon: "chevron.right", action: viewModel.goForward)
+                NavButton(
+                    icon: "chevron.left",
+                    action: viewModel.goBack,
+                    isEnabled: viewModel.activeTab?.canGoBack == true
+                )
+                NavButton(
+                    icon: "chevron.right",
+                    action: viewModel.goForward,
+                    isEnabled: viewModel.activeTab?.canGoForward == true
+                )
                 NavButton(icon: "arrow.clockwise", action: viewModel.reload)
             }
             
@@ -57,19 +65,21 @@ struct AddressBar: View {
 struct NavButton: View {
     let icon: String
     let action: () -> Void
-    
+    var isEnabled: Bool = true
+
     @State private var isHovering = false
-    
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(Color("TextMuted"))
+                .foregroundColor(isEnabled ? Color("TextMuted") : Color("TextMuted").opacity(0.4))
                 .frame(width: 28, height: 28)
-                .background(isHovering ? Color("AccentHover") : Color.clear)
+                .background(isHovering && isEnabled ? Color("AccentHover") : Color.clear)
                 .cornerRadius(2) // Minimal rounding
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
         .onHover { hovering in
             isHovering = hovering
         }
