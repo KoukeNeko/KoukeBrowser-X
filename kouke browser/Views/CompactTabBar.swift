@@ -13,35 +13,18 @@ struct CompactTabBar: View {
     @State private var draggedTabId: UUID?
 
     var body: some View {
-        HStack(spacing: 0) {
-            #if os(macOS)
-            // Space for native traffic lights
-            Color.clear
-                .frame(width: 80, height: 36)
-            #endif
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                #if os(macOS)
+                // Keep space for traffic lights - 80px seems standard for Big Sur+
+                Color.clear
+                    .frame(width: 80, height: 36)
+                #endif
 
-            // Navigation buttons
-            HStack(spacing: 2) {
-                Button(action: { viewModel.goBack() }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color("TextMuted"))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
+                // Calculate available width for tabs (Total - TrafficLights - RightButtons)
+                let availableWidth = geometry.size.width - 80 - 72
+                let tabWidth = calculateTabWidth(totalAvailableWidth: availableWidth)
 
-                Button(action: { viewModel.goForward() }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color("TextMuted"))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.trailing, 8)
-
-            // Tab strip
-            GeometryReader { geometry in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 0) {
                         ForEach(viewModel.tabs) { tab in
@@ -51,55 +34,56 @@ struct CompactTabBar: View {
                                 onSelect: { viewModel.switchToTab(tab.id) },
                                 onClose: { viewModel.closeTab(tab.id) },
                                 canClose: viewModel.tabs.count > 1,
-                                onReorder: { draggedId, destinationId, insertAfter in
-                                    withAnimation(.default) {
-                                        if insertAfter {
-                                            viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
-                                        } else {
-                                            viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
-                                        }
+                                onReorder: { draggedId, targetId, after in
+                                    if after {
+                                        viewModel.moveTabAfter(draggedId: draggedId, destinationId: targetId)
+                                    } else {
+                                        viewModel.moveTabBefore(draggedId: draggedId, destinationId: targetId)
                                     }
                                 },
-                                onReceiveTab: { transferData, destinationId, insertAfter in
-                                    receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
+                                onReceiveTab: { transferData, destinationId, after in
+                                    receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: after)
                                 },
-                                onDetach: { tabId, screenPoint in
-                                    detachTabToNewWindow(tabId: tabId, at: screenPoint)
+                                onDetach: { tabId, point in
+                                    detachTabToNewWindow(tabId: tabId, at: point)
                                 },
-                                onDragStarted: { id in
-                                    draggedTabId = id
-                                },
-                                onDragEnded: {
-                                    draggedTabId = nil
-                                },
+                                onDragStarted: { id in draggedTabId = id },
+                                onDragEnded: { draggedTabId = nil },
                                 inputURL: viewModel.inputURL,
                                 onInputURLChange: { url in viewModel.inputURL = url },
                                 onNavigate: { viewModel.navigate() }
                             )
-                            .frame(width: calculateTabWidth(totalAvailableWidth: geometry.size.width - 40)) // Subtract typical button width
-                            .opacity(draggedTabId == tab.id ? 0.5 : 1.0)
+                            .frame(width: tabWidth)
                         }
-
-                        // Add tab button
-                        Button(action: { viewModel.addTab() }) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color("TextMuted"))
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 2)
                     }
-                    .padding(.horizontal, 4)
-                    // Ensure full height to avoid clipping
-                    .frame(minWidth: geometry.size.width, alignment: .leading)
                 }
+                .frame(width: max(0, availableWidth)) // Ensure non-negative width
+
+                // Right side buttons
+                HStack(spacing: 4) {
+                    Button(action: { viewModel.addTab() }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { /* TODO: Show menu */ }) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(width: 72)
+                .padding(.trailing, 8)
             }
-
-
         }
         .frame(height: 36)
         .background(Color("TitleBarBg"))
+        .zIndex(100) // Ensure it sits on top if used in a ZStack
     }
 
     private func urlDisplayText(_ url: String) -> String {
@@ -148,7 +132,88 @@ struct CompactTabBar: View {
     }
 }
 
-// MARK: - Compact Draggable Tab View (SwiftUI Wrapper)
+// MARK: - Compact Address Bar (simple text field for URL input)
+
+struct CompactAddressBar: View {
+    let tab: Tab
+    let inputURL: String
+    let onInputURLChange: (String) -> Void
+    let onNavigate: () -> Void
+
+    @State private var isEditing = false
+    @State private var localInput: String = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Favicon or loading indicator
+            if tab.isLoading {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 14, height: 14)
+            } else {
+                if let faviconURL = tab.faviconURL {
+                    AsyncImage(url: faviconURL) { image in
+                        image.resizable().aspectRatio(contentMode: .fit)
+                    } placeholder: {
+                        Image(systemName: "globe")
+                            .foregroundColor(Color("TextMuted"))
+                    }
+                    .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: "globe")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color("TextMuted"))
+                        .frame(width: 14, height: 14)
+                }
+            }
+
+            // Text field for URL/search
+            TextField("Search or enter website", text: $localInput)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundColor(Color("Text"))
+                .focused($isFocused)
+                .onSubmit {
+                    onInputURLChange(localInput)
+                    onNavigate()
+                    isFocused = false
+                }
+                .onChange(of: isFocused) { _, focused in
+                    if focused {
+                        // When focused, show full URL for editing
+                        localInput = tab.url == "about:blank" ? "" : tab.url
+                    }
+                }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .background(Color("TabActive").opacity(0.5))
+        .cornerRadius(6)
+        .onAppear {
+            // Display host or title when not editing
+            localInput = displayText
+        }
+        .onChange(of: tab.url) { _, _ in
+            if !isFocused {
+                localInput = displayText
+            }
+        }
+    }
+
+    private var displayText: String {
+        if tab.url == "about:blank" {
+            return ""
+        }
+        if let url = URL(string: tab.url), let host = url.host {
+            return host
+        }
+        return tab.url
+    }
+}
+
+// MARK: - Compact Draggable Tab View (SwiftUI Wrapper) - DEPRECATED, kept for reference
 
 struct CompactDraggableTabView: NSViewRepresentable {
     let tab: Tab
