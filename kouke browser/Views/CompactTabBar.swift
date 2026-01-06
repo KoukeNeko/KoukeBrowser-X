@@ -11,7 +11,14 @@ import AppKit
 struct CompactTabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @ObservedObject private var settings = BrowserSettings.shared
+    @ObservedObject private var bookmarkManager = BookmarkManager.shared
     @State private var draggedTabId: UUID?
+    @State private var showingBookmarks = false
+
+    private var isCurrentPageBookmarked: Bool {
+        guard let tab = viewModel.activeTab else { return false }
+        return bookmarkManager.isBookmarked(url: tab.url)
+    }
 
     // Filter tabs based on settings - show all or only active tab
     private var visibleTabs: [Tab] {
@@ -55,7 +62,7 @@ struct CompactTabBar: View {
                 #endif
 
                 // Calculate available width for tabs (Total - TrafficLights - NavButtons - RightButtons)
-                let availableWidth = geometry.size.width - 80 - 60 - 72
+                let availableWidth = geometry.size.width - 80 - 60 - 140
                 let tabWidth = calculateTabWidth(totalAvailableWidth: availableWidth)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -96,6 +103,32 @@ struct CompactTabBar: View {
 
                 // Right side buttons
                 HStack(spacing: 4) {
+                    // Bookmark button
+                    Button(action: toggleBookmark) {
+                        Image(systemName: isCurrentPageBookmarked ? "star.fill" : "star")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(isCurrentPageBookmarked ? .yellow : Color("TextMuted"))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
+
+                    // Show bookmarks button
+                    Button(action: { showingBookmarks = true }) {
+                        Image(systemName: "book")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show Bookmarks")
+                    .popover(isPresented: $showingBookmarks, arrowEdge: .bottom) {
+                        BookmarksView(onNavigate: { url in
+                            viewModel.inputURL = url
+                            viewModel.navigate()
+                        })
+                    }
+
                     Button(action: { viewModel.addTab() }) {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .medium))
@@ -132,7 +165,7 @@ struct CompactTabBar: View {
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                 }
-                .frame(width: 72)
+                .frame(width: 140)
                 .padding(.trailing, 8)
             }
         }
@@ -183,6 +216,11 @@ struct CompactTabBar: View {
         let idealWidth = availableForTabs / count
 
         return max(minWidth, idealWidth)
+    }
+
+    private func toggleBookmark() {
+        guard let tab = viewModel.activeTab, !tab.isSpecialPage else { return }
+        bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
     }
 }
 

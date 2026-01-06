@@ -247,6 +247,7 @@ struct BookmarkRow: View {
 
 struct FolderRow: View {
     let folder: BookmarkFolder
+    let onTap: () -> Void
     let onEdit: () -> Void
 
     @State private var isHovering = false
@@ -277,6 +278,9 @@ struct FolderRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
         .onHover { hovering in
             isHovering = hovering
         }
