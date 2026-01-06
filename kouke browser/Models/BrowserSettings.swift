@@ -114,6 +114,10 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(tabBarStyle.rawValue, forKey: "tabBarStyle") }
     }
 
+    @Published var showTabsInCompactMode: Bool {
+        didSet { defaults.set(showTabsInCompactMode, forKey: "showTabsInCompactMode") }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -148,6 +152,8 @@ class BrowserSettings: ObservableObject {
         } else {
             tabBarStyle = .normal
         }
+
+        showTabsInCompactMode = defaults.bool(forKey: "showTabsInCompactMode")
     }
 
     func getSearchURL(for query: String) -> String {

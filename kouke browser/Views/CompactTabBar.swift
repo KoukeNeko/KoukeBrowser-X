@@ -10,7 +10,18 @@ import AppKit
 
 struct CompactTabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var draggedTabId: UUID?
+
+    // Filter tabs based on settings - show all or only active tab
+    private var visibleTabs: [Tab] {
+        if settings.showTabsInCompactMode {
+            return viewModel.tabs
+        } else {
+            // Only show active tab
+            return viewModel.tabs.filter { $0.id == viewModel.activeTabId }
+        }
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -27,10 +38,11 @@ struct CompactTabBar: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 0) {
-                        ForEach(viewModel.tabs) { tab in
+                        ForEach(visibleTabs) { tab in
                             CompactDraggableTabView(
                                 tab: tab,
                                 isActive: tab.id == viewModel.activeTabId,
+                                canDrag: settings.showTabsInCompactMode,
                                 onSelect: { viewModel.switchToTab(tab.id) },
                                 onClose: { viewModel.closeTab(tab.id) },
                                 canClose: viewModel.tabs.count > 1,
@@ -138,16 +150,15 @@ struct CompactTabBar: View {
     }
     
     private func calculateTabWidth(totalAvailableWidth: CGFloat) -> CGFloat {
-        let count = CGFloat(viewModel.tabs.count)
+        let count = CGFloat(visibleTabs.count)
         guard count > 0 else { return 150 }
-        
+
         let minWidth: CGFloat = 100 // Minimum width before scrolling starts
-        // let maxWidth: CGFloat = 500 // REMOVED limit
-        
+
         // Spacing is 0 now
-        let availableForTabs = totalAvailableWidth 
+        let availableForTabs = totalAvailableWidth
         let idealWidth = availableForTabs / count
-        
+
         return max(minWidth, idealWidth)
     }
 }
@@ -238,6 +249,7 @@ struct CompactAddressBar: View {
 struct CompactDraggableTabView: NSViewRepresentable {
     let tab: Tab
     let isActive: Bool
+    let canDrag: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
     let canClose: Bool
@@ -255,6 +267,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
         container.configure(
             tab: tab,
             isActive: isActive,
+            canDrag: canDrag,
             onSelect: onSelect,
             onClose: onClose,
             canClose: canClose,
@@ -275,7 +288,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: CompactDraggableTabContainerView, context: Context) {
-        nsView.updateTab(tab, isActive: isActive, canClose: canClose, inputURL: inputURL)
+        nsView.updateTab(tab, isActive: isActive, canClose: canClose, canDrag: canDrag, inputURL: inputURL)
     }
 }
 
@@ -290,6 +303,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     private var currentTab: Tab?
     private var isActive: Bool = false
     private var canClose: Bool = true
+    private var canDrag: Bool = false
     private var selectAction: (() -> Void)?
     private var closeAction: (() -> Void)?
     private var reorderAction: ((UUID, Int) -> Void)?
@@ -534,6 +548,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     func configure(
         tab: Tab,
         isActive: Bool,
+        canDrag: Bool,
         onSelect: @escaping () -> Void,
         onClose: @escaping () -> Void,
         canClose: Bool,
@@ -552,6 +567,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         self.currentTab = tab
         self.isActive = isActive
         self.canClose = canClose
+        self.canDrag = canDrag
         self.selectAction = onSelect
         self.closeAction = onClose
         self.reorderAction = onReorder
@@ -566,13 +582,14 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         updateUI()
     }
 
-    func updateTab(_ tab: Tab, isActive: Bool, canClose: Bool, inputURL: String? = nil) {
+    func updateTab(_ tab: Tab, isActive: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil) {
         self.tabId = tab.id
         self.tabTitle = tab.title
         self.tabURL = tab.url
         self.currentTab = tab
         self.isActive = isActive
         self.canClose = canClose
+        self.canDrag = canDrag
         if let input = inputURL {
             self.inputURL = input
         }
@@ -692,8 +709,20 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     }
 
     override func mouseDragged(with event: NSEvent) {
-        // Compact mode doesn't support tab dragging
-        // Users can reorder tabs via the hamburger menu
+        // Only allow dragging when showTabsInCompactMode is enabled
+        guard canDrag else { return }
+        guard !isDragging else { return }
+
+        let currentLocation = convert(event.locationInWindow, from: nil)
+        let distance = hypot(
+            currentLocation.x - dragStartLocation.x,
+            currentLocation.y - dragStartLocation.y
+        )
+
+        guard distance > dragThreshold else { return }
+
+        isDragging = true
+        startDragSession(with: event)
     }
 
     override func mouseUp(with event: NSEvent) {

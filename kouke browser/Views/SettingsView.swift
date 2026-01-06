@@ -151,6 +151,19 @@ struct TabsSection: View {
                 .padding(.leading, SettingsView.labelWidth * 1.05 + 10)
                 .padding(.top, -4)
 
+            if settings.tabBarStyle == .compact {
+                SettingsRow(label: "Show tabs in compact mode:") {
+                    Toggle("", isOn: $settings.showTabsInCompactMode)
+                        .labelsHidden()
+                }
+
+                Text("When enabled, all tabs are shown in compact mode. When disabled, only the active tab is displayed.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.leading, SettingsView.labelWidth * 1.05 + 10)
+                    .padding(.top, -4)
+            }
+
             Divider().padding(.vertical, 8)
 
             SettingsSection {
