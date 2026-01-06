@@ -403,6 +403,14 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             return super.hitTest(point)
         }
 
+        // Allow address field to receive mouse events for text selection
+        if let addressField = addressField, !addressField.isHidden {
+            let pointInAddress = convert(point, to: addressField)
+            if addressField.bounds.contains(pointInAddress) {
+                return addressField
+            }
+        }
+
         if let closeButton = closeButton, !closeButton.isHidden {
             let pointInClose = convert(point, to: closeButton)
             if closeButton.bounds.contains(pointInClose) {
@@ -484,7 +492,12 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         address.drawsBackground = false
         address.isBordered = false
         address.focusRingType = .none
-        address.lineBreakMode = .byTruncatingTail
+        address.isEditable = true
+        address.isSelectable = true
+        address.allowsEditingTextAttributes = false
+        address.cell?.isScrollable = true
+        address.cell?.wraps = false
+        address.cell?.usesSingleLineMode = true
         address.translatesAutoresizingMaskIntoConstraints = false
         address.delegate = self
         address.isHidden = true
