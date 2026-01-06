@@ -18,7 +18,7 @@ struct CompactTabBar: View {
                 #if os(macOS)
                 // Keep space for traffic lights - 80px seems standard for Big Sur+
                 Color.clear
-                    .frame(width: 80, height: 36)
+                    .frame(width: 80, height: 40)
                 #endif
 
                 // Calculate available width for tabs (Total - TrafficLights - RightButtons)
@@ -81,7 +81,7 @@ struct CompactTabBar: View {
                 .padding(.trailing, 8)
             }
         }
-        .frame(height: 36)
+        .frame(height: 40)
         .background(Color("TitleBarBg"))
         .zIndex(100) // Ensure it sits on top if used in a ZStack
     }
@@ -318,7 +318,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     }
 
     override var intrinsicContentSize: NSSize {
-        return NSSize(width: NSView.noIntrinsicMetric, height: 28)
+        return NSSize(width: NSView.noIntrinsicMetric, height: 32)
     }
 
     private func setupView() {
