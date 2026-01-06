@@ -272,6 +272,12 @@ class BrowserViewModel: ObservableObject {
         tabs[index].isLoading = isLoading
     }
 
+    func updateTabNavigationState(canGoBack: Bool, canGoForward: Bool, for tabId: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[index].canGoBack = canGoBack
+        tabs[index].canGoForward = canGoForward
+    }
+
     #if os(macOS)
     func updateTabThumbnail(_ thumbnail: NSImage, for tabId: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }

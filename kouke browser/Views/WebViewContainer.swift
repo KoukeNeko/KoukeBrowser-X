@@ -73,6 +73,13 @@ struct WebViewContainer: NSViewRepresentable {
                     parent.viewModel.updateTabURL(url, for: parent.tabId)
                 }
 
+                // Update navigation state (back/forward availability)
+                parent.viewModel.updateTabNavigationState(
+                    canGoBack: webView.canGoBack,
+                    canGoForward: webView.canGoForward,
+                    for: parent.tabId
+                )
+
                 // Capture thumbnail after page loads with a slight delay for rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     self.parent.viewModel.captureTabThumbnail(for: self.parent.tabId)
@@ -160,9 +167,15 @@ struct WebViewContainer: UIViewRepresentable {
                 if let url = webView.url?.absoluteString {
                     parent.viewModel.updateTabURL(url, for: parent.tabId)
                 }
+                // Update navigation state
+                parent.viewModel.updateTabNavigationState(
+                    canGoBack: webView.canGoBack,
+                    canGoForward: webView.canGoForward,
+                    for: parent.tabId
+                )
             }
         }
-        
+
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)

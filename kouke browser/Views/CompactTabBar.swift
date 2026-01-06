@@ -30,10 +30,32 @@ struct CompactTabBar: View {
                 // Keep space for traffic lights - 80px seems standard for Big Sur+
                 Color.clear
                     .frame(width: 80, height: 40)
+
+                // Navigation buttons (back/forward)
+                HStack(spacing: 2) {
+                    Button(action: { viewModel.goBack() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(viewModel.activeTab?.canGoBack == true ? Color("Text") : Color("TextMuted").opacity(0.5))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.activeTab?.canGoBack != true)
+
+                    Button(action: { viewModel.goForward() }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(viewModel.activeTab?.canGoForward == true ? Color("Text") : Color("TextMuted").opacity(0.5))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.activeTab?.canGoForward != true)
+                }
+                .frame(width: 60)
                 #endif
 
-                // Calculate available width for tabs (Total - TrafficLights - RightButtons)
-                let availableWidth = geometry.size.width - 80 - 72
+                // Calculate available width for tabs (Total - TrafficLights - NavButtons - RightButtons)
+                let availableWidth = geometry.size.width - 80 - 60 - 72
                 let tabWidth = calculateTabWidth(totalAvailableWidth: availableWidth)
 
                 ScrollView(.horizontal, showsIndicators: false) {
