@@ -16,6 +16,7 @@ struct WebViewContainer: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.defaultWebpagePreferences.preferredContentMode = .desktop
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -25,7 +26,7 @@ struct WebViewContainer: NSViewRepresentable {
         // webView.setValue(false, forKey: "drawsBackground")
 
         // Set User-Agent to mimic Safari on macOS to ensure proper rendering of sites like Google
-        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
         // Register with ViewModel
         Task { @MainActor in
