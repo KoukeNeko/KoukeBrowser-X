@@ -25,7 +25,7 @@ struct Tab: Identifiable, Equatable {
     var thumbnail: UIImage?
     #endif
 
-    init(id: UUID = UUID(), title: String = "New Tab", url: String = "about:blank", isLoading: Bool = false, canGoBack: Bool = false, canGoForward: Bool = false) {
+    init(id: UUID = UUID(), title: String = "New Tab", url: String = "kouke:blank", isLoading: Bool = false, canGoBack: Bool = false, canGoForward: Bool = false) {
         self.id = id
         self.title = title
         self.url = url
@@ -47,7 +47,12 @@ struct Tab: Identifiable, Equatable {
     
     /// Check if this tab is showing a special internal page
     var isSpecialPage: Bool {
-        url == "about:blank"
+        url == "kouke:blank" || url.hasPrefix("kouke://")
+    }
+
+    /// Check if this is a kouke:// internal page
+    var isKoukePage: Bool {
+        url.hasPrefix("kouke://")
     }
     
     /// Get favicon URL from Google's favicon service

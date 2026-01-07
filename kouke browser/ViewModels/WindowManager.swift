@@ -171,7 +171,7 @@ struct BrowserViewForWindow: View {
                 ZStack {
                     ForEach(viewModel.tabs) { tab in
                         Group {
-                            if tab.url == "about:blank" {
+                            if tab.url == "kouke:blank" {
                                 StartPage(onNavigate: viewModel.navigateFromStartPage)
                             } else {
                                 WebViewContainer(

@@ -12,20 +12,41 @@ struct WebViewContainer: NSViewRepresentable {
     let tabId: UUID
     let url: String
     @ObservedObject var viewModel: BrowserViewModel
+    private let settings = BrowserSettings.shared
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        // Apply JavaScript setting
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = !settings.disableJavaScript
         configuration.defaultWebpagePreferences.preferredContentMode = .desktop
+
+        // Apply image blocking if enabled
+        if settings.disableImages {
+            let blockImagesRule = """
+            [{
+                "trigger": { "url-filter": ".*", "resource-type": ["image"] },
+                "action": { "type": "block" }
+            }]
+            """
+            WKContentRuleListStore.default().compileContentRuleList(
+                forIdentifier: "BlockImages",
+                encodedContentRuleList: blockImagesRule
+            ) { ruleList, error in
+                if let ruleList = ruleList {
+                    configuration.userContentController.add(ruleList)
+                }
+            }
+        }
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
-        // // Dark background to match theme
-        // webView.setValue(false, forKey: "drawsBackground")
+        // Enable developer extras for Web Inspector
+        webView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
 
-        // Set User-Agent to mimic Safari on macOS to ensure proper rendering of sites like Google
+        // Set User-Agent to mimic Chrome on macOS for proper rendering
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
         // Register with ViewModel
@@ -36,9 +57,9 @@ struct WebViewContainer: NSViewRepresentable {
         // Add KVO observers for title and URL changes
         context.coordinator.setupObservers(for: webView)
 
-        // Load initial URL
-        if let url = URL(string: url) {
-            webView.load(URLRequest(url: url))
+        // Load initial URL (skip kouke:// URLs as they are handled by viewSource)
+        if !url.hasPrefix("kouke://"), let urlObj = URL(string: url) {
+            webView.load(URLRequest(url: urlObj))
         }
 
         return webView
@@ -81,10 +102,15 @@ struct WebViewContainer: NSViewRepresentable {
                 }
             }
 
-            // Observe URL changes
+            // Observe URL changes (skip for kouke:// URLs to preserve custom URLs)
             urlObservation = webView.observe(\.url, options: [.new]) { [weak self] webView, _ in
                 guard let self = self else { return }
                 Task { @MainActor in
+                    // Don't overwrite kouke:// URLs (they're internal pages with custom content)
+                    let currentTabURL = self.parent.viewModel.tabs.first { $0.id == self.parent.tabId }?.url ?? ""
+                    if currentTabURL.hasPrefix("kouke:") {
+                        return
+                    }
                     if let url = webView.url?.absoluteString {
                         self.parent.viewModel.updateTabURL(url, for: self.parent.tabId)
                     }

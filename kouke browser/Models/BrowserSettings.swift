@@ -118,6 +118,15 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(showTabsInCompactMode, forKey: "showTabsInCompactMode") }
     }
 
+    // Developer settings
+    @Published var disableJavaScript: Bool {
+        didSet { defaults.set(disableJavaScript, forKey: "disableJavaScript") }
+    }
+
+    @Published var disableImages: Bool {
+        didSet { defaults.set(disableImages, forKey: "disableImages") }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -154,6 +163,10 @@ class BrowserSettings: ObservableObject {
         }
 
         showTabsInCompactMode = defaults.bool(forKey: "showTabsInCompactMode")
+
+        // Developer settings
+        disableJavaScript = defaults.bool(forKey: "disableJavaScript")
+        disableImages = defaults.bool(forKey: "disableImages")
     }
 
     func getSearchURL(for query: String) -> String {
@@ -165,4 +178,41 @@ class BrowserSettings: ObservableObject {
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         dataStore.removeData(ofTypes: dataTypes, modifiedSince: Date.distantPast) { }
     }
+
+    // MARK: - Developer Menu Actions
+
+    func toggleJavaScript() {
+        disableJavaScript.toggle()
+        // Notify webviews to reload with new setting
+        NotificationCenter.default.post(name: .developerSettingsChanged, object: nil)
+    }
+
+    func toggleImages() {
+        disableImages.toggle()
+        NotificationCenter.default.post(name: .developerSettingsChanged, object: nil)
+    }
+
+    func clearCache() {
+        let dataStore = WKWebsiteDataStore.default()
+        let cacheTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeOfflineWebApplicationCache
+        ]
+        dataStore.removeData(ofTypes: cacheTypes, modifiedSince: Date.distantPast) { }
+    }
+
+    func clearCookies() {
+        let dataStore = WKWebsiteDataStore.default()
+        let cookieTypes: Set<String> = [
+            WKWebsiteDataTypeCookies,
+            WKWebsiteDataTypeSessionStorage,
+            WKWebsiteDataTypeLocalStorage
+        ]
+        dataStore.removeData(ofTypes: cookieTypes, modifiedSince: Date.distantPast) { }
+    }
+}
+
+extension Notification.Name {
+    static let developerSettingsChanged = Notification.Name("developerSettingsChanged")
 }

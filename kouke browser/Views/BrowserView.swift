@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import WebKit
 
 struct BrowserView: View {
     @StateObject private var viewModel = BrowserViewModel()
@@ -52,7 +53,7 @@ struct BrowserView: View {
                     // Keep all WebViews alive, show/hide based on active tab
                     ForEach(viewModel.tabs) { tab in
                         Group {
-                            if tab.url == "about:blank" {
+                            if tab.url == "kouke:blank" {
                                 StartPage(onNavigate: viewModel.navigateFromStartPage)
                             } else {
                                 WebViewContainer(
@@ -108,6 +109,41 @@ struct BrowserView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 showTabOverview.toggle()
             }
+        }
+        // Developer menu handlers
+        .onReceive(NotificationCenter.default.publisher(for: .viewSource)) { _ in
+            viewModel.viewSource()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openDevTools)) { _ in
+            viewModel.openDevTools()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openConsole)) { _ in
+            // Open JavaScript console in a new tab
+            if let webView = viewModel.getActiveWebView() {
+                webView.evaluateJavaScript("""
+                    (function() {
+                        var logs = [];
+                        var originalLog = console.log;
+                        console.log = function() {
+                            logs.push(Array.from(arguments).join(' '));
+                            originalLog.apply(console, arguments);
+                        };
+                        return 'Console logging enabled. Check console output.';
+                    })()
+                """, completionHandler: nil)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleJavaScript)) { _ in
+            settings.toggleJavaScript()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleImages)) { _ in
+            settings.toggleImages()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .clearCache)) { _ in
+            settings.clearCache()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .clearCookies)) { _ in
+            settings.clearCookies()
         }
     }
 }
