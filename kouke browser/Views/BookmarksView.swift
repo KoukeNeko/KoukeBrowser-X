@@ -148,9 +148,11 @@ struct BookmarksView: View {
         .frame(minWidth: 280, minHeight: 400)
         .background(Color("Bg"))
         .sheet(item: $editingBookmark) { bookmark in
-            EditBookmarkView(bookmark: bookmark) { updatedTitle, updatedURL in
-                bookmarkManager.updateBookmark(bookmark.id, title: updatedTitle, url: updatedURL)
+        .sheet(item: $editingBookmark) { bookmark in
+            EditBookmarkView(bookmark: bookmark) { updatedTitle, updatedURL, updatedFolderId in
+                bookmarkManager.updateBookmark(bookmark.id, title: updatedTitle, url: updatedURL, folderId: .some(updatedFolderId))
             }
+        }
         }
         .sheet(item: $editingFolder) { folder in
             EditFolderView(folder: folder) { updatedName in
@@ -290,18 +292,21 @@ struct FolderRow: View {
 // MARK: - Edit Bookmark View
 
 struct EditBookmarkView: View {
+    @ObservedObject var bookmarkManager = BookmarkManager.shared
     let bookmark: Bookmark
-    let onSave: (String, String) -> Void
+    let onSave: (String, String, UUID?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var url: String
+    @State private var folderId: UUID?
 
-    init(bookmark: Bookmark, onSave: @escaping (String, String) -> Void) {
+    init(bookmark: Bookmark, onSave: @escaping (String, String, UUID?) -> Void) {
         self.bookmark = bookmark
         self.onSave = onSave
         _title = State(initialValue: bookmark.title)
         _url = State(initialValue: bookmark.url)
+        _folderId = State(initialValue: bookmark.folderId)
     }
 
     var body: some View {
@@ -325,6 +330,19 @@ struct EditBookmarkView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Folder")
+                    .font(.caption)
+                    .foregroundColor(Color("TextMuted"))
+                Picker("", selection: $folderId) {
+                    Text("Bookmarks Bar").tag(UUID?.none)
+                    ForEach(bookmarkManager.folders) { folder in
+                        Text(folder.name).tag(UUID?.some(folder.id))
+                    }
+                }
+                .labelsHidden()
+            }
+
             HStack {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.escape)
@@ -332,7 +350,7 @@ struct EditBookmarkView: View {
                 Spacer()
 
                 Button("Save") {
-                    onSave(title, url)
+                    onSave(title, url, folderId)
                     dismiss()
                 }
                 .keyboardShortcut(.return)
@@ -394,15 +412,17 @@ struct EditFolderView: View {
 // MARK: - Add Bookmark Dialog
 
 struct AddBookmarkDialog: View {
+    @ObservedObject var bookmarkManager = BookmarkManager.shared
     let initialTitle: String
     let initialURL: String
-    let onSave: (String, String) -> Void
+    let onSave: (String, String, UUID?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var url: String
+    @State private var folderId: UUID? = nil
 
-    init(title: String, url: String, onSave: @escaping (String, String) -> Void) {
+    init(title: String, url: String, onSave: @escaping (String, String, UUID?) -> Void) {
         self.initialTitle = title
         self.initialURL = url
         self.onSave = onSave
@@ -435,6 +455,19 @@ struct AddBookmarkDialog: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Folder")
+                    .font(.caption)
+                    .foregroundColor(Color("TextMuted"))
+                Picker("", selection: $folderId) {
+                    Text("Bookmarks Bar").tag(UUID?.none)
+                    ForEach(bookmarkManager.folders) { folder in
+                        Text(folder.name).tag(UUID?.some(folder.id))
+                    }
+                }
+                .labelsHidden()
+            }
+
             HStack {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.escape)
@@ -442,7 +475,7 @@ struct AddBookmarkDialog: View {
                 Spacer()
 
                 Button("Add") {
-                    onSave(title, url)
+                    onSave(title, url, folderId)
                     dismiss()
                 }
                 .keyboardShortcut(.return)

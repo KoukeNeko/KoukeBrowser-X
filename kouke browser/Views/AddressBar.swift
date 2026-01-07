@@ -87,8 +87,8 @@ struct AddressBar: View {
         .background(Color("Bg"))
         .sheet(isPresented: $showingAddBookmark) {
             if let tab = viewModel.activeTab {
-                AddBookmarkDialog(title: tab.title, url: tab.url) { title, url in
-                    bookmarkManager.addBookmark(title: title, url: url)
+                AddBookmarkDialog(title: tab.title, url: tab.url) { title, url, folderId in
+                    bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
                 }
             }
         }
