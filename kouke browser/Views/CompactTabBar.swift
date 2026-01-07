@@ -183,7 +183,7 @@ struct CompactTabBar: View {
     }
 
     private func urlDisplayText(_ url: String) -> String {
-        guard url != "about:blank",
+        guard url != "kouke:blank",
               let urlObj = URL(string: url),
               let host = urlObj.host else {
             return ""
@@ -289,7 +289,7 @@ struct CompactAddressBar: View {
                 .onChange(of: isFocused) { _, focused in
                     if focused {
                         // When focused, show full URL for editing
-                        localInput = tab.url == "about:blank" ? "" : tab.url
+                        localInput = tab.url == "kouke:blank" ? "" : tab.url
                     }
                 }
         }
@@ -310,7 +310,7 @@ struct CompactAddressBar: View {
     }
 
     private var displayText: String {
-        if tab.url == "about:blank" {
+        if tab.url == "kouke:blank" {
             return ""
         }
         if let url = URL(string: tab.url), let host = url.host {

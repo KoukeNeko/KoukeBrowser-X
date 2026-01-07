@@ -32,14 +32,14 @@ class BrowserViewModel: ObservableObject {
             // Read startup behavior from settings
             switch settings.startupBehavior {
             case .startPage:
-                tab = Tab(title: "New Tab", url: "about:blank")
+                tab = Tab(title: "New Tab", url: "kouke:blank")
             case .customURL:
-                let url = settings.startupURL.isEmpty ? "about:blank" : settings.startupURL
+                let url = settings.startupURL.isEmpty ? "kouke:blank" : settings.startupURL
                 let title = extractHostname(from: url) ?? "New Tab"
-                tab = Tab(title: title, url: url, isLoading: !url.isEmpty && url != "about:blank")
+                tab = Tab(title: title, url: url, isLoading: !url.isEmpty && url != "kouke:blank")
             case .lastTabs:
                 // TODO: Implement session restore
-                tab = Tab(title: "New Tab", url: "about:blank")
+                tab = Tab(title: "New Tab", url: "kouke:blank")
             }
         }
 
@@ -281,6 +281,73 @@ class BrowserViewModel: ObservableObject {
 
     func getWebView(for tabId: UUID) -> WKWebView? {
         return webViews[tabId]
+    }
+
+    /// Get the WebView for the active tab
+    func getActiveWebView() -> WKWebView? {
+        guard let id = activeTabId else { return nil }
+        return webViews[id]
+    }
+
+    /// View the HTML source of the current page
+    func viewSource() {
+        guard let webView = getActiveWebView(), let currentURL = activeTab?.url else { return }
+        webView.evaluateJavaScript("document.documentElement.outerHTML") { [weak self] result, error in
+            guard let self = self, let html = result as? String else { return }
+
+            Task { @MainActor in
+                // Create a new tab with kouke:// protocol
+                let encodedURL = currentURL.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? currentURL
+                let sourceURL = "kouke://view-source/\(encodedURL)"
+                let newTab = Tab(title: "Source: \(currentURL)", url: sourceURL)
+                self.tabs.append(newTab)
+                self.switchToTab(newTab.id)
+
+                // After a short delay, inject the source into a basic viewer
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    if let newWebView = self.webViews[newTab.id] {
+                        let escapedHTML = html
+                            .replacingOccurrences(of: "&", with: "&amp;")
+                            .replacingOccurrences(of: "<", with: "&lt;")
+                            .replacingOccurrences(of: ">", with: "&gt;")
+                            .replacingOccurrences(of: "\"", with: "&quot;")
+                            .replacingOccurrences(of: "\n", with: "<br>")
+                            .replacingOccurrences(of: " ", with: "&nbsp;")
+
+                        let viewerHTML = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>View Source</title>
+                            <style>
+                                body {
+                                    font-family: 'SF Mono', Menlo, Monaco, monospace;
+                                    background: #1e1e1e;
+                                    color: #d4d4d4;
+                                    padding: 16px;
+                                    margin: 0;
+                                    white-space: pre-wrap;
+                                    word-wrap: break-word;
+                                    font-size: 12px;
+                                    line-height: 1.5;
+                                }
+                            </style>
+                        </head>
+                        <body>\(escapedHTML)</body>
+                        </html>
+                        """
+                        newWebView.loadHTMLString(viewerHTML, baseURL: nil)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Open Web Inspector for the active tab
+    func openDevTools() {
+        guard let webView = getActiveWebView() else { return }
+        // Use private API to show Web Inspector
+        webView.perform(Selector(("_showInspector")))
     }
 
     // MARK: - Tab State Updates (called from WebView delegates)

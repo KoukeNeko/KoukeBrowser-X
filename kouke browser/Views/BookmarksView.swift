@@ -232,7 +232,6 @@ struct BookmarkRow: View {
                 .buttonStyle(.plain)
             }
         }
-        }
         .padding(.vertical, 4)
         .padding(.horizontal)
         .contentShape(Rectangle())
@@ -277,7 +276,6 @@ struct FolderRow: View {
             Image(systemName: "chevron.right")
                 .foregroundColor(Color("TextMuted"))
                 .font(.caption)
-        }
         }
         .padding(.vertical, 4)
         .padding(.horizontal)

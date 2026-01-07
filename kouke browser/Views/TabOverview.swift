@@ -215,7 +215,7 @@ struct TabThumbnailCard: View {
     @ViewBuilder
     private var thumbnailPlaceholder: some View {
         Group {
-            if tab.url == "about:blank" {
+            if tab.url == "kouke:blank" {
                 Image(systemName: "plus.square.dashed")
                     .font(.system(size: 32))
             } else {

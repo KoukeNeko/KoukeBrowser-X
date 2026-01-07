@@ -153,13 +153,15 @@ struct kouke_browserApp: App {
 
                 Divider()
 
-                Button("Disable JavaScript") {
-                    NotificationCenter.default.post(name: .toggleJavaScript, object: nil)
-                }
+                Toggle("Disable JavaScript", isOn: Binding(
+                    get: { BrowserSettings.shared.disableJavaScript },
+                    set: { _ in NotificationCenter.default.post(name: .toggleJavaScript, object: nil) }
+                ))
 
-                Button("Disable Images") {
-                    NotificationCenter.default.post(name: .toggleImages, object: nil)
-                }
+                Toggle("Disable Images", isOn: Binding(
+                    get: { BrowserSettings.shared.disableImages },
+                    set: { _ in NotificationCenter.default.post(name: .toggleImages, object: nil) }
+                ))
 
                 Divider()
 
