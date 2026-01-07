@@ -21,8 +21,11 @@ struct WebViewContainer: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
-        // Dark background to match theme
-        webView.setValue(false, forKey: "drawsBackground")
+        // // Dark background to match theme
+        // webView.setValue(false, forKey: "drawsBackground")
+
+        // Set User-Agent to mimic Safari on macOS to ensure proper rendering of sites like Google
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"
 
         // Register with ViewModel
         Task { @MainActor in
