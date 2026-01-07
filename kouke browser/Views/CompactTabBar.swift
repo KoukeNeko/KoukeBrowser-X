@@ -112,6 +112,13 @@ struct CompactTabBar: View {
                     }
                     .buttonStyle(.plain)
                     .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
+                    .popover(isPresented: $showingAddBookmark, arrowEdge: .bottom) {
+                        if let tab = viewModel.activeTab {
+                            AddBookmarkPopover(title: tab.title, url: tab.url) { title, url, folderId in
+                                bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
+                            }
+                        }
+                    }
 
                     // Show bookmarks button
                     Button(action: { showingBookmarks = true }) {
@@ -171,6 +178,7 @@ struct CompactTabBar: View {
         }
         .frame(height: 40)
         .background(Color("TitleBarBg"))
+
         .zIndex(100) // Ensure it sits on top if used in a ZStack
     }
 
@@ -218,9 +226,16 @@ struct CompactTabBar: View {
         return max(minWidth, idealWidth)
     }
 
+    @State private var showingAddBookmark = false
+
     private func toggleBookmark() {
         guard let tab = viewModel.activeTab, !tab.isSpecialPage else { return }
-        bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
+        
+        if isCurrentPageBookmarked {
+            bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
+        } else {
+            showingAddBookmark = true
+        }
     }
 }
 

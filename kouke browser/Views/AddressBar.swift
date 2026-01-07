@@ -64,6 +64,13 @@ struct AddressBar: View {
             .padding(6)
             .contentShape(Rectangle())
             .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
+            .popover(isPresented: $showingAddBookmark, arrowEdge: .bottom) {
+                if let tab = viewModel.activeTab {
+                    AddBookmarkPopover(title: tab.title, url: tab.url) { title, url, folderId in
+                        bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
+                    }
+                }
+            }
 
             // Show bookmarks button
             Button(action: { showingBookmarks = true }) {
@@ -85,13 +92,7 @@ struct AddressBar: View {
         .padding(.horizontal, 6)
         .frame(height: 40)
         .background(Color("Bg"))
-        .sheet(isPresented: $showingAddBookmark) {
-            if let tab = viewModel.activeTab {
-                AddBookmarkDialog(title: tab.title, url: tab.url) { title, url, folderId in
-                    bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
-                }
-            }
-        }
+
         .onReceive(NotificationCenter.default.publisher(for: .addBookmark)) { _ in
             if let tab = viewModel.activeTab, !tab.isSpecialPage {
                 if isCurrentPageBookmarked {
@@ -111,7 +112,12 @@ struct AddressBar: View {
 
     private func toggleBookmark() {
         guard let tab = viewModel.activeTab, !tab.isSpecialPage else { return }
-        bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
+        
+        if isCurrentPageBookmarked {
+             bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
+        } else {
+             showingAddBookmark = true
+        }
     }
 }
 

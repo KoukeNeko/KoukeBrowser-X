@@ -486,6 +486,136 @@ struct AddBookmarkDialog: View {
     }
 }
 
+// MARK: - Add Bookmark Popover (Folder Selection)
+
+struct AddBookmarkPopover: View {
+    @ObservedObject var bookmarkManager = BookmarkManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    let initialTitle: String
+    let initialURL: String
+    let onSave: (String, String, UUID?) -> Void
+
+    @State private var title: String
+    @State private var folderPath: [UUID] = []  // Navigation stack
+
+    private var currentFolderId: UUID? {
+        folderPath.last
+    }
+
+    private var currentFolderName: String {
+        if let folderId = currentFolderId,
+           let folder = bookmarkManager.folders.first(where: { $0.id == folderId }) {
+            return folder.name
+        }
+        return "Bookmarks"
+    }
+
+    init(title: String, url: String, onSave: @escaping (String, String, UUID?) -> Void) {
+        self.initialTitle = title
+        self.initialURL = url
+        self.onSave = onSave
+        _title = State(initialValue: title)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                if !folderPath.isEmpty {
+                    Button(action: { folderPath.removeLast() }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(Color("TextMuted"))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text(folderPath.isEmpty ? "Add Bookmark" : currentFolderName)
+                    .font(.headline)
+
+                Spacer()
+
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .foregroundColor(Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(Color("TitleBarBg"))
+
+            // Name field
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Name")
+                    .font(.caption)
+                    .foregroundColor(Color("TextMuted"))
+                TextField("Bookmark name", text: $title)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            // Folder list
+            List {
+                // Root option (Bookmarks Bar)
+                if folderPath.isEmpty {
+                    Button(action: {
+                        onSave(title, initialURL, nil)
+                        dismiss()
+                    }) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "bookmark.fill")
+                                .foregroundColor(.blue)
+                                .frame(width: 16, height: 16)
+                            Text("Bookmarks Bar")
+                                .foregroundColor(Color("Text"))
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Subfolders
+                ForEach(bookmarkManager.folders(in: currentFolderId)) { folder in
+                    HStack(spacing: 10) {
+                        Image(systemName: "folder.fill")
+                            .foregroundColor(.blue)
+                            .frame(width: 16, height: 16)
+
+                        Text(folder.name)
+                            .lineLimit(1)
+                            .foregroundColor(Color("Text"))
+
+                        Spacer()
+
+                        // Navigate into folder
+                        Button(action: { folderPath.append(folder.id) }) {
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(Color("TextMuted"))
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // Tap on folder itself to save here
+                        onSave(title, initialURL, folder.id)
+                        dismiss()
+                    }
+                }
+            }
+            .listStyle(.plain)
+        }
+        .frame(minWidth: 280, minHeight: 300)
+        .background(Color("Bg"))
+    }
+}
+
 // MARK: - Notification Extension
 
 extension Notification.Name {
