@@ -49,7 +49,7 @@ struct TabOverview: View {
                     .keyboardShortcut(.escape, modifiers: [])
                 }
                 .padding(.horizontal, 30)
-                .padding(.top, 30)
+                .padding(.top, 60)
                 .padding(.bottom, 20)
 
                 // Tab grid
