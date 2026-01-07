@@ -399,13 +399,75 @@ class BrowserViewModel: ObservableObject {
                                 ::-webkit-scrollbar-corner {
                                     background: #1e1e1e;
                                 }
+                                
+                                /* Toolbar styling */
+                                #toolbar {
+                                    position: fixed;
+                                    top: 0;
+                                    left: 0;
+                                    right: 0;
+                                    height: 32px;
+                                    background: #252526; /* VS Code status bar color */
+                                    border-bottom: 1px solid #3e3e42;
+                                    display: flex;
+                                    align-items: center;
+                                    padding: 0 12px;
+                                    z-index: 1000;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                    font-size: 12px;
+                                    color: #cccccc;
+                                }
+                                #toolbar label {
+                                    cursor: pointer;
+                                    user-select: none;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 6px;
+                                }
+                                
+                                /* Content padding for toolbar */
+                                pre[class*="language-"] {
+                                    padding-top: 48px !important; /* 32px tool bar + 16px padding */
+                                }
+                                
+                                /* Toggle State Classes */
+                                .wrap-enabled code[class*="language-"] {
+                                    white-space: pre-wrap !important;
+                                    word-break: break-all !important;
+                                }
+                                .wrap-disabled code[class*="language-"] {
+                                    white-space: pre !important;
+                                    word-break: normal !important;
+                                    overflow-x: auto !important;
+                                }
                             </style>
                         </head>
                         <body>
-                            <pre class="line-numbers"><code class="language-html">\(escapedHTML)</code></pre>
+                            <div id="toolbar">
+                                <label>
+                                    <input type="checkbox" id="line-wrap-toggle" checked>
+                                    自動換行
+                                </label>
+                            </div>
+                        
+                            <pre class="line-numbers wrap-enabled" id="code-pre"><code class="language-html">\(escapedHTML)</code></pre>
                             
                             <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
                             <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+                            <script>
+                                const toggle = document.getElementById('line-wrap-toggle');
+                                const preBlock = document.getElementById('code-pre');
+                                
+                                toggle.addEventListener('change', (e) => {
+                                    if (e.target.checked) {
+                                        preBlock.classList.remove('wrap-disabled');
+                                        preBlock.classList.add('wrap-enabled');
+                                    } else {
+                                        preBlock.classList.remove('wrap-enabled');
+                                        preBlock.classList.add('wrap-disabled');
+                                    }
+                                });
+                            </script>
                         </body>
                         </html>
                         """
