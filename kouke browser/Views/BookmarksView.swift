@@ -148,11 +148,9 @@ struct BookmarksView: View {
         .frame(minWidth: 280, minHeight: 400)
         .background(Color("Bg"))
         .sheet(item: $editingBookmark) { bookmark in
-        .sheet(item: $editingBookmark) { bookmark in
             EditBookmarkView(bookmark: bookmark) { updatedTitle, updatedURL, updatedFolderId in
                 bookmarkManager.updateBookmark(bookmark.id, title: updatedTitle, url: updatedURL, folderId: .some(updatedFolderId))
             }
-        }
         }
         .sheet(item: $editingFolder) { folder in
             EditFolderView(folder: folder) { updatedName in
