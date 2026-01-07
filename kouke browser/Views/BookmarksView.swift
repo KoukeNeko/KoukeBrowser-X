@@ -232,7 +232,9 @@ struct BookmarkRow: View {
                 .buttonStyle(.plain)
             }
         }
+        }
         .padding(.vertical, 4)
+        .padding(.horizontal)
         .contentShape(Rectangle())
         .onTapGesture {
             onNavigate()
@@ -276,7 +278,9 @@ struct FolderRow: View {
                 .foregroundColor(Color("TextMuted"))
                 .font(.caption)
         }
+        }
         .padding(.vertical, 4)
+        .padding(.horizontal)
         .contentShape(Rectangle())
         .onTapGesture {
             onTap()
@@ -559,31 +563,36 @@ struct AddBookmarkPopover: View {
 
             // Folder list
             List {
-                // Root option (Bookmarks Bar)
-                if folderPath.isEmpty {
-                    Button(action: {
-                        onSave(title, initialURL, nil)
-                        dismiss()
-                    }) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "bookmark.fill")
+                // "Save here" button (always shows current location)
+                Button(action: {
+                    onSave(title, initialURL, currentFolderId)
+                    dismiss()
+                }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: folderPath.isEmpty ? "bookmark.fill" : "folder.fill")
+                            .foregroundColor(.blue)
+                            .frame(width: 16, height: 16)
+                        Text("Add to \"\(currentFolderName)\"")
+                            .foregroundColor(Color("Text"))
+                            .fontWeight(.medium)
+                        Spacer()
+                        if folderPath.isEmpty {
+                            Image(systemName: "checkmark")
                                 .foregroundColor(.blue)
-                                .frame(width: 16, height: 16)
-                            Text("Bookmarks Bar")
-                                .foregroundColor(Color("Text"))
-                            Spacer()
+                                .font(.caption)
                         }
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
 
                 // Subfolders
                 ForEach(bookmarkManager.folders(in: currentFolderId)) { folder in
                     HStack(spacing: 10) {
-                        Image(systemName: "folder.fill")
-                            .foregroundColor(.blue)
+                        Image(systemName: "folder")
+                            .foregroundColor(Color("TextMuted"))
                             .frame(width: 16, height: 16)
 
                         Text(folder.name)
@@ -592,20 +601,16 @@ struct AddBookmarkPopover: View {
 
                         Spacer()
 
-                        // Navigate into folder
-                        Button(action: { folderPath.append(folder.id) }) {
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(Color("TextMuted"))
-                                .font(.caption)
-                        }
-                        .buttonStyle(.plain)
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(Color("TextMuted"))
+                            .font(.caption)
                     }
                     .padding(.vertical, 4)
+                    .padding(.horizontal)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        // Tap on folder itself to save here
-                        onSave(title, initialURL, folder.id)
-                        dismiss()
+                        // Navigate into folder
+                        folderPath.append(folder.id)
                     }
                 }
             }
