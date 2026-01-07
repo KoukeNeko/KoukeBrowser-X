@@ -310,30 +310,83 @@ class BrowserViewModel: ObservableObject {
                             .replacingOccurrences(of: "&", with: "&amp;")
                             .replacingOccurrences(of: "<", with: "&lt;")
                             .replacingOccurrences(of: ">", with: "&gt;")
-                            .replacingOccurrences(of: "\"", with: "&quot;")
-                            .replacingOccurrences(of: "\n", with: "<br>")
-                            .replacingOccurrences(of: " ", with: "&nbsp;")
 
                         let viewerHTML = """
                         <!DOCTYPE html>
                         <html>
                         <head>
-                            <title>View Source</title>
+                            <title>View Source: \(currentURL)</title>
+                            <!-- Prism.js for Syntax Highlighting -->
+                            <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+                            <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
                             <style>
                                 body {
-                                    font-family: 'SF Mono', Menlo, Monaco, monospace;
+                                    margin: 0;
+                                    padding: 0;
                                     background: #1e1e1e;
                                     color: #d4d4d4;
-                                    padding: 16px;
-                                    margin: 0;
-                                    white-space: pre-wrap;
-                                    word-wrap: break-word;
+                                }
+                                /* VS Code styling overrides */
+                                pre[class*="language-"] {
+                                    background: #1e1e1e;
+                                    text-shadow: none;
+                                    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
                                     font-size: 12px;
                                     line-height: 1.5;
+                                    direction: ltr;
+                                    text-align: left;
+                                    white-space: pre;
+                                    word-spacing: normal;
+                                    word-break: normal;
+                                    tab-size: 4;
+                                    hyphens: none;
+                                    padding: 1em;
+                                    margin: 0;
+                                    overflow: auto;
+                                    height: 100vh;
+                                    box-sizing: border-box;
+                                }
+                                
+                                /* Line numbers styling */
+                                .line-numbers .line-numbers-rows {
+                                    border-right: 1px solid #404040;
+                                }
+                                .line-numbers-rows > span:before {
+                                    color: #858585;
+                                }
+
+                                /* Logic/brackets color */
+                                .token.punctuation {
+                                    color: #d4d4d4;
+                                }
+                                /* Tag names */
+                                .token.tag {
+                                    color: #569cd6;
+                                }
+                                /* Attribute names */
+                                .token.attr-name {
+                                    color: #9cdcfe;
+                                }
+                                /* Strings */
+                                .token.attr-value, .token.string {
+                                    color: #ce9178;
+                                }
+                                /* Comments */
+                                .token.comment {
+                                    color: #6a9955;
+                                }
+                                
+                                code[class*="language-"] {
+                                    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
                                 }
                             </style>
                         </head>
-                        <body>\(escapedHTML)</body>
+                        <body>
+                            <pre class="line-numbers"><code class="language-html">\(escapedHTML)</code></pre>
+                            
+                            <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+                            <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+                        </body>
                         </html>
                         """
                         newWebView.loadHTMLString(viewerHTML, baseURL: nil)
