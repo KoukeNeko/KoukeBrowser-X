@@ -16,6 +16,7 @@ struct BrowserView: View {
     @State private var showTabOverview = false
     @State private var showHistory = false
     @State private var showBookmarks = false
+    @State private var showDownloads = false
     @State private var showBookmarkAllTabsAlert = false
     @State private var currentZoomLevel: Double = 1.0
 
@@ -26,6 +27,9 @@ struct BrowserView: View {
             }
             .sheet(isPresented: $showBookmarks) {
                 bookmarksSheet
+            }
+            .sheet(isPresented: $showDownloads) {
+                downloadsSheet
             }
             .background(Color("Bg"))
             .ignoresSafeArea()
@@ -42,6 +46,7 @@ struct BrowserView: View {
             .modifier(ViewMenuModifier(viewModel: viewModel, showTabOverview: $showTabOverview, currentZoomLevel: $currentZoomLevel))
             .modifier(HistoryMenuModifier(viewModel: viewModel, showHistory: $showHistory))
             .modifier(BookmarksMenuModifier(showBookmarks: $showBookmarks, showBookmarkAllTabsAlert: $showBookmarkAllTabsAlert))
+            .modifier(DownloadsMenuModifier(showDownloads: $showDownloads))
             .modifier(DeveloperMenuModifier(viewModel: viewModel, settings: settings))
             .modifier(KoukeURLModifier(viewModel: viewModel))
             .modifier(SettingsModifier(viewModel: viewModel))
@@ -149,6 +154,10 @@ struct BrowserView: View {
             }
         )
         .frame(width: 400, height: 500)
+    }
+
+    private var downloadsSheet: some View {
+        DownloadsView(onDismiss: { showDownloads = false })
     }
 
     // MARK: - Bookmark Methods
@@ -293,6 +302,17 @@ struct BookmarksMenuModifier: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .bookmarkAllTabs)) { _ in
                 showBookmarkAllTabsAlert = true
+            }
+    }
+}
+
+struct DownloadsMenuModifier: ViewModifier {
+    @Binding var showDownloads: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
+                showDownloads = true
             }
     }
 }
