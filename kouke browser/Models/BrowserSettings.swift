@@ -492,10 +492,25 @@ class BrowserSettings: ObservableObject {
         hideIPFromTrackers = defaults.bool(forKey: "hideIPFromTrackers")
         blockAllCookies = defaults.bool(forKey: "blockAllCookies")
 
-        // Toolbar appearance settings - default to false (hidden)
-        showDownloadsButton = defaults.bool(forKey: "showDownloadsButton")
-        showBookmarksButton = defaults.bool(forKey: "showBookmarksButton")
-        showAddToFavoritesButton = defaults.bool(forKey: "showAddToFavoritesButton")
+        // Toolbar appearance settings - default to true (visible)
+        if defaults.object(forKey: "showDownloadsButton") != nil {
+            showDownloadsButton = defaults.bool(forKey: "showDownloadsButton")
+        } else {
+            showDownloadsButton = true
+        }
+
+        if defaults.object(forKey: "showBookmarksButton") != nil {
+            showBookmarksButton = defaults.bool(forKey: "showBookmarksButton")
+        } else {
+            showBookmarksButton = true
+        }
+
+        if defaults.object(forKey: "showAddToFavoritesButton") != nil {
+            showAddToFavoritesButton = defaults.bool(forKey: "showAddToFavoritesButton")
+        } else {
+            showAddToFavoritesButton = true
+        }
+
         alwaysUseSheetForMenuShortcuts = defaults.bool(forKey: "alwaysUseSheetForMenuShortcuts")
 
         // Advanced settings
