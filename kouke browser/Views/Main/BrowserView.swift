@@ -23,7 +23,7 @@ struct BrowserView: View {
             .background(Color("Bg"))
             .ignoresSafeArea()
             .preferredColorScheme(settings.theme.colorScheme)
-            .withhostingWindow { [viewModel, settings] window in
+            .withhostingWindow(theme: settings.theme) { [viewModel, settings] window in
                 configureWindow(window, viewModel: viewModel, settings: settings)
             }
             .onChange(of: viewModel.activeTab?.title) { _, newTitle in
@@ -158,8 +158,12 @@ struct BrowserView: View {
 
     // MARK: - Helper Methods
 
+    // MARK: - Helper Methods
+
     private func configureWindow(_ window: NSWindow, viewModel: BrowserViewModel, settings: BrowserSettings) {
-        window.backgroundColor = NSColor(named: "TitleBarBg")
+        // Enforce the correct appearance on the window immediately
+        updateWindowAppearance(window, theme: settings.theme)
+        
         window.isMovableByWindowBackground = true
         window.tabbingMode = .disallowed
         window.makeKeyAndOrderFront(nil)
@@ -169,6 +173,12 @@ struct BrowserView: View {
         }
         window.isExcludedFromWindowsMenu = false
         ToolbarTabBarManager.shared.setup(for: window, viewModel: viewModel, settings: settings)
+    }
+
+    private func updateWindowAppearance(_ window: NSWindow, theme: AppTheme) {
+        window.appearance = NSAppearance(named: theme == .dark ? .darkAqua : .aqua)
+        window.backgroundColor = NSColor(named: "TitleBarBg")
+        window.invalidateShadow()
     }
 
     private func handleOpenConsole() {
@@ -191,6 +201,7 @@ struct BrowserView: View {
 // Helper to access NSWindow and observe changes
 struct WindowAccessor: NSViewRepresentable {
     var callback: (NSWindow) -> Void
+    var theme: AppTheme // Add theme observation
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -202,7 +213,14 @@ struct WindowAccessor: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // When theme changes, re-run callback to update window
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                self.callback(window)
+            }
+        }
+    }
 }
 
 // Manages toolbar with overlay style and traffic light positioning
@@ -268,8 +286,8 @@ class ToolbarTabBarManager: NSObject {
 }
 
 extension View {
-    func withhostingWindow(_ callback: @escaping (NSWindow) -> Void) -> some View {
-        self.background(WindowAccessor(callback: callback))
+    func withhostingWindow(theme: AppTheme, _ callback: @escaping (NSWindow) -> Void) -> some View {
+        self.background(WindowAccessor(callback: callback, theme: theme))
     }
 }
 
