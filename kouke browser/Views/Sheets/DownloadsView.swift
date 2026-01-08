@@ -141,7 +141,6 @@ struct DownloadsView: View {
 
 struct DownloadRow: View {
     let item: DownloadItem
-    @ObservedObject var downloadManager = DownloadManager.shared
     @State private var isHovering = false
 
     var body: some View {
@@ -178,9 +177,6 @@ struct DownloadRow: View {
             }
 
             Spacer()
-
-            // Action buttons
-            actionButtons
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
@@ -275,12 +271,30 @@ struct DownloadRow: View {
             Text("Waiting...")
                 .foregroundColor(Color("TextMuted"))
         case .downloading:
-            if let total = item.fileSize {
-                Text("\(item.formattedDownloadedSize) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
-                    .foregroundColor(Color("TextMuted"))
-            } else {
-                Text("Downloading \(item.formattedDownloadedSize)")
-                    .foregroundColor(Color("TextMuted"))
+            VStack(alignment: .leading, spacing: 1) {
+                // First line: size progress
+                if let total = item.fileSize {
+                    Text("\(item.formattedDownloadedSize) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
+                        .foregroundColor(Color("TextMuted"))
+                } else {
+                    Text("Downloading \(item.formattedDownloadedSize)")
+                        .foregroundColor(Color("TextMuted"))
+                }
+
+                // Second line: speed and time remaining
+                HStack(spacing: 4) {
+                    if let speed = item.formattedSpeed {
+                        Text(speed)
+                            .foregroundColor(Color.accentColor)
+                    }
+
+                    if let timeRemaining = item.formattedTimeRemaining {
+                        Text("—")
+                            .foregroundColor(Color("TextMuted"))
+                        Text(timeRemaining)
+                            .foregroundColor(Color("TextMuted"))
+                    }
+                }
             }
         case .completed:
             if item.fileExists {
@@ -299,48 +313,6 @@ struct DownloadRow: View {
         }
     }
 
-    @ViewBuilder
-    private var actionButtons: some View {
-        if isHovering {
-            switch item.status {
-            case .downloading:
-                Button(action: { downloadManager.cancelDownload(item.id) }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-
-            case .completed where item.fileExists:
-                HStack(spacing: 8) {
-                    Button(action: { downloadManager.showInFinder(item.id) }) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 14))
-                            .foregroundColor(Color("TextMuted"))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { downloadManager.openDownloadedFile(item.id) }) {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(.system(size: 14))
-                            .foregroundColor(.blue)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-            case .failed, .cancelled:
-                Button(action: { downloadManager.retryDownload(item.id) }) {
-                    Image(systemName: "arrow.clockwise.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.blue)
-                }
-                .buttonStyle(.plain)
-
-            default:
-                EmptyView()
-            }
-        }
-    }
 }
 
 #Preview {

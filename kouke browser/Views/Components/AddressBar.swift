@@ -11,11 +11,35 @@ struct AddressBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @ObservedObject var bookmarkManager = BookmarkManager.shared
     @ObservedObject var settings = BrowserSettings.shared
+    @ObservedObject var downloadManager = DownloadManager.shared
     @FocusState private var isAddressFocused: Bool
     @State private var showingAddBookmark = false
     @State private var showingBookmarks = false
     @State private var showingDownloads = false
     @State private var showingSecurityInfo = false
+
+    /// Calculate overall download progress (0.0 to 1.0)
+    private var downloadProgress: Double? {
+        let activeItems = downloadManager.downloadItems.filter { $0.status == .downloading }
+        guard !activeItems.isEmpty else { return nil }
+
+        var totalDownloaded: Int64 = 0
+        var totalSize: Int64 = 0
+
+        for item in activeItems {
+            totalDownloaded += item.downloadedSize
+            if let size = item.fileSize, size > 0 {
+                totalSize += size
+            }
+        }
+
+        guard totalSize > 0 else { return nil }
+        return Double(totalDownloaded) / Double(totalSize)
+    }
+
+    private var hasActiveDownloads: Bool {
+        downloadManager.downloadItems.contains { $0.status == .downloading }
+    }
 
     private var isCurrentPageBookmarked: Bool {
         guard let tab = viewModel.activeTab else { return false }
@@ -85,59 +109,9 @@ struct AddressBar: View {
                     }
             }
 
-            // Add to Favorites button (conditional)
-            if settings.showAddToFavoritesButton {
-                Button(action: toggleBookmark) {
-                    Image(systemName: isCurrentPageBookmarked ? "star.fill" : "star")
-                        .font(.system(size: 14))
-                        .foregroundColor(isCurrentPageBookmarked ? .yellow : Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-                .padding(6)
-                .contentShape(Rectangle())
-                .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
-                .popover(isPresented: $showingAddBookmark, arrowEdge: .bottom) {
-                    if let tab = viewModel.activeTab {
-                        AddBookmarkPopover(title: tab.title, url: tab.url) { title, url, folderId in
-                            bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
-                        }
-                    }
-                }
-            }
-
-            // Downloads button (conditional)
-            if settings.showDownloadsButton {
-                Button(action: { showingDownloads = true }) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-                .padding(6)
-                .contentShape(Rectangle())
-                .help("Show Downloads")
-                .popover(isPresented: $showingDownloads, arrowEdge: .bottom) {
-                    DownloadsView(onDismiss: { showingDownloads = false })
-                }
-            }
-
-            // Bookmarks button (conditional)
-            if settings.showBookmarksButton {
-                Button(action: { showingBookmarks = true }) {
-                    Image(systemName: "book")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-                .padding(6)
-                .contentShape(Rectangle())
-                .help("Show Bookmarks")
-                .popover(isPresented: $showingBookmarks, arrowEdge: .bottom) {
-                    BookmarksView(onNavigate: { url in
-                        viewModel.inputURL = url
-                        viewModel.navigate()
-                    })
-                }
+            // Toolbar buttons in custom order
+            ForEach(settings.toolbarButtonOrder) { button in
+                toolbarButton(for: button)
             }
         }
         .padding(.horizontal, 6)
@@ -177,6 +151,84 @@ struct AddressBar: View {
              bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
         } else {
              showingAddBookmark = true
+        }
+    }
+
+    @ViewBuilder
+    private func toolbarButton(for button: ToolbarButton) -> some View {
+        switch button {
+        case .addToFavorites:
+            if settings.showAddToFavoritesButton {
+                Button(action: toggleBookmark) {
+                    Image(systemName: isCurrentPageBookmarked ? "star.fill" : "star")
+                        .font(.system(size: 14))
+                        .foregroundColor(isCurrentPageBookmarked ? .yellow : Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
+                .popover(isPresented: $showingAddBookmark, arrowEdge: .bottom) {
+                    if let tab = viewModel.activeTab {
+                        AddBookmarkPopover(title: tab.title, url: tab.url) { title, url, folderId in
+                            bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
+                        }
+                    }
+                }
+            }
+
+        case .downloads:
+            if settings.showDownloadsButton {
+                Button(action: { showingDownloads = true }) {
+                    ZStack {
+                        if let progress = downloadProgress {
+                            Circle()
+                                .stroke(Color("TextMuted").opacity(0.2), lineWidth: 2)
+                                .frame(width: 18, height: 18)
+                            Circle()
+                                .trim(from: 0, to: progress)
+                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                .frame(width: 18, height: 18)
+                                .rotationEffect(.degrees(-90))
+
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color.accentColor)
+                        } else {
+                            Image(systemName: hasActiveDownloads ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                .font(.system(size: 14))
+                                .foregroundColor(hasActiveDownloads ? Color.accentColor : Color("TextMuted"))
+                        }
+                    }
+                    .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help("Show Downloads")
+                .popover(isPresented: $showingDownloads, arrowEdge: .bottom) {
+                    DownloadsView(onDismiss: { showingDownloads = false })
+                }
+            }
+
+        case .bookmarks:
+            if settings.showBookmarksButton {
+                Button(action: { showingBookmarks = true }) {
+                    Image(systemName: "book")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help("Show Bookmarks")
+                .popover(isPresented: $showingBookmarks, arrowEdge: .bottom) {
+                    BookmarksView(onNavigate: { url in
+                        viewModel.inputURL = url
+                        viewModel.navigate()
+                    })
+                }
+            }
         }
     }
 }

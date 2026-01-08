@@ -118,6 +118,7 @@ struct WebViewContainer: NSViewRepresentable {
         private var urlObservation: NSKeyValueObservation?
         private var canGoBackObservation: NSKeyValueObservation?
         private var canGoForwardObservation: NSKeyValueObservation?
+        private var isLoadingObservation: NSKeyValueObservation?
 
         weak var webView: WKWebView?
         private var pendingNavigationHost: String?
@@ -133,6 +134,7 @@ struct WebViewContainer: NSViewRepresentable {
             urlObservation?.invalidate()
             canGoBackObservation?.invalidate()
             canGoForwardObservation?.invalidate()
+            isLoadingObservation?.invalidate()
         }
 
         func setupObservers(for webView: WKWebView) {
@@ -182,6 +184,14 @@ struct WebViewContainer: NSViewRepresentable {
                         canGoForward: webView.canGoForward,
                         for: self.parent.tabId
                     )
+                }
+            }
+
+            // Observe isLoading changes - most reliable way to track loading state
+            isLoadingObservation = webView.observe(\.isLoading, options: [.new]) { [weak self] webView, _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.parent.viewModel.updateTabLoadingState(webView.isLoading, for: self.parent.tabId)
                 }
             }
         }
@@ -255,6 +265,12 @@ struct WebViewContainer: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            Task { @MainActor in
+                parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
             }
@@ -550,12 +566,18 @@ struct WebViewContainer: NSViewRepresentable {
             download.delegate = self
         }
 
+        // Store mapping from WKDownload to our tracking ID
+        private var wkDownloadIds: [ObjectIdentifier: UUID] = [:]
+
         @available(macOS 11.3, *)
         func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
             let settings = BrowserSettings.shared
 
             // Determine download location
             let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+
+            // Get expected file size from response
+            let expectedSize = response.expectedContentLength > 0 ? response.expectedContentLength : nil
 
             if settings.downloadLocation == .askEachTime {
                 // Show save panel
@@ -564,8 +586,20 @@ struct WebViewContainer: NSViewRepresentable {
                 savePanel.nameFieldStringValue = suggestedFilename
                 savePanel.canCreateDirectories = true
 
-                savePanel.begin { response in
-                    if response == .OK, let url = savePanel.url {
+                savePanel.begin { [weak self] panelResponse in
+                    if panelResponse == .OK, let url = savePanel.url {
+                        // Track download in DownloadManager synchronously on main thread
+                        if let sourceURL = download.originalRequest?.url {
+                            DispatchQueue.main.async {
+                                let trackingId = DownloadManager.shared.trackDownload(
+                                    url: sourceURL,
+                                    suggestedFilename: suggestedFilename,
+                                    destinationPath: url.path,
+                                    expectedSize: expectedSize
+                                )
+                                self?.wkDownloadIds[ObjectIdentifier(download)] = trackingId
+                            }
+                        }
                         completionHandler(url)
                     } else {
                         completionHandler(nil)
@@ -586,31 +620,51 @@ struct WebViewContainer: NSViewRepresentable {
                     counter += 1
                 }
 
+                // Track download in DownloadManager synchronously
+                if let sourceURL = download.originalRequest?.url {
+                    let trackingId = DownloadManager.shared.trackDownload(
+                        url: sourceURL,
+                        suggestedFilename: suggestedFilename,
+                        destinationPath: destinationURL.path,
+                        expectedSize: expectedSize
+                    )
+                    self.wkDownloadIds[ObjectIdentifier(download)] = trackingId
+                }
+
                 completionHandler(destinationURL)
             }
+        }
 
-            // Start tracking in DownloadManager
-            if let url = download.originalRequest?.url {
-                Task { @MainActor in
-                    _ = DownloadManager.shared.startDownload(url: url, suggestedFilename: suggestedFilename)
+        @available(macOS 11.3, *)
+        func download(_ download: WKDownload, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+            // Update progress in DownloadManager
+            let downloadKey = ObjectIdentifier(download)
+            Task { @MainActor in
+                if let trackingId = self.wkDownloadIds[downloadKey] {
+                    let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
+                    DownloadManager.shared.updateProgress(for: trackingId, downloadedSize: totalBytesWritten, totalSize: total)
                 }
             }
         }
 
         @available(macOS 11.3, *)
         func downloadDidFinish(_ download: WKDownload) {
-            // Download completed - DownloadManager handles the completion
+            let downloadKey = ObjectIdentifier(download)
+            Task { @MainActor in
+                if let trackingId = self.wkDownloadIds[downloadKey] {
+                    DownloadManager.shared.completeWKDownload(for: trackingId)
+                    self.wkDownloadIds.removeValue(forKey: downloadKey)
+                }
+            }
         }
 
         @available(macOS 11.3, *)
         func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-            // Download failed - DownloadManager handles the error
-            if let url = download.originalRequest?.url {
-                Task { @MainActor in
-                    // Find the download item and update its status
-                    if let item = DownloadManager.shared.downloadItems.first(where: { $0.url == url.absoluteString }) {
-                        DownloadManager.shared.failDownload(for: item.id, error: error)
-                    }
+            let downloadKey = ObjectIdentifier(download)
+            Task { @MainActor in
+                if let trackingId = self.wkDownloadIds[downloadKey] {
+                    DownloadManager.shared.failDownload(for: trackingId, error: error)
+                    self.wkDownloadIds.removeValue(forKey: downloadKey)
                 }
             }
         }

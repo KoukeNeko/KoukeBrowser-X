@@ -30,7 +30,24 @@ class DownloadManager: ObservableObject {
 
     // MARK: - Download Operations
 
-    /// Start a new download
+    /// Track a download started by WKDownload (does not start a new download)
+    func trackDownload(url: URL, suggestedFilename: String?, destinationPath: String?, expectedSize: Int64? = nil) -> UUID {
+        let filename = suggestedFilename ?? url.lastPathComponent
+        let item = DownloadItem(
+            filename: filename,
+            url: url.absoluteString,
+            localPath: destinationPath,
+            fileSize: expectedSize,
+            status: .downloading
+        )
+
+        downloadItems.insert(item, at: 0)
+        saveDownloads()
+
+        return item.id
+    }
+
+    /// Start a new download using URLSession (for retry functionality)
     func startDownload(url: URL, suggestedFilename: String?) -> UUID {
         let filename = suggestedFilename ?? url.lastPathComponent
         let item = DownloadItem(
@@ -133,12 +150,62 @@ class DownloadManager: ObservableObject {
     func updateProgress(for id: UUID, downloadedSize: Int64, totalSize: Int64?) {
         guard let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
 
+        let now = Date()
+        let item = downloadItems[index]
+
+        // Calculate speed
+        if let lastTime = item.lastUpdateTime {
+            let elapsed = now.timeIntervalSince(lastTime)
+            if elapsed > 0.1 { // Update at least every 100ms
+                let bytesDiff = downloadedSize - item.lastDownloadedSize
+                let instantSpeed = Double(bytesDiff) / elapsed
+
+                // Smooth the speed with exponential moving average
+                let alpha = 0.3
+                if item.bytesPerSecond > 0 {
+                    downloadItems[index].bytesPerSecond = alpha * instantSpeed + (1 - alpha) * item.bytesPerSecond
+                } else {
+                    downloadItems[index].bytesPerSecond = instantSpeed
+                }
+
+                downloadItems[index].lastUpdateTime = now
+                downloadItems[index].lastDownloadedSize = downloadedSize
+            }
+        } else {
+            downloadItems[index].lastUpdateTime = now
+            downloadItems[index].lastDownloadedSize = downloadedSize
+        }
+
         downloadItems[index].downloadedSize = downloadedSize
         if let total = totalSize {
             downloadItems[index].fileSize = total
         }
     }
 
+    /// Complete a WKDownload (file already at destination)
+    func completeWKDownload(for id: UUID) {
+        guard let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
+
+        downloadItems[index].status = .completed
+        downloadItems[index].completedAt = Date()
+
+        // Get actual file size from destination
+        if let path = downloadItems[index].localPath,
+           let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+           let size = attributes[.size] as? Int64 {
+            downloadItems[index].fileSize = size
+            downloadItems[index].downloadedSize = size
+        }
+
+        saveDownloads()
+
+        // Open safe files if setting enabled
+        if BrowserSettings.shared.openSafeFilesAfterDownload && isSafeFile(downloadItems[index].filename) {
+            openDownloadedFile(id)
+        }
+    }
+
+    /// Complete a URLSession download (needs to move file)
     func completeDownload(for id: UUID, localURL: URL) {
         guard let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
 

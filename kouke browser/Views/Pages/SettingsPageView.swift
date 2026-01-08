@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Settings Page View
 
@@ -272,22 +273,12 @@ private struct AppearanceSettingsContent: View {
             }
 
             SettingsCard(title: "Toolbar Buttons") {
-                Text("Choose which buttons to display in the address bar. When shown, clicking opens a popover. When hidden, use menu or keyboard shortcuts to open in a separate window.")
+                Text("Drag to reorder buttons. Toggle visibility with the checkbox.")
                     .font(.system(size: 11))
                     .foregroundColor(Color("TextMuted"))
                     .padding(.bottom, 8)
 
-                SettingsPageRow(label: "") {
-                    Toggle("Show Downloads button", isOn: $settings.showDownloadsButton)
-                }
-
-                SettingsPageRow(label: "") {
-                    Toggle("Show Bookmarks button", isOn: $settings.showBookmarksButton)
-                }
-
-                SettingsPageRow(label: "") {
-                    Toggle("Show Add to Favorites button", isOn: $settings.showAddToFavoritesButton)
-                }
+                ToolbarButtonOrderList(settings: settings)
 
                 Divider().padding(.vertical, 4)
 
@@ -301,6 +292,125 @@ private struct AppearanceSettingsContent: View {
                     .padding(.top, 4)
             }
         }
+    }
+}
+
+// MARK: - Toolbar Button Order List
+
+private struct ToolbarButtonOrderList: View {
+    @ObservedObject var settings: BrowserSettings
+    @State private var draggingItem: ToolbarButton?
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(settings.toolbarButtonOrder) { button in
+                ToolbarButtonRow(
+                    button: button,
+                    isEnabled: isButtonEnabled(button),
+                    onToggle: { toggleButton(button) }
+                )
+                .onDrag {
+                    draggingItem = button
+                    return NSItemProvider(object: button.rawValue as NSString)
+                }
+                .onDrop(of: [.text], delegate: ToolbarButtonDropDelegate(
+                    item: button,
+                    items: $settings.toolbarButtonOrder,
+                    draggingItem: $draggingItem
+                ))
+            }
+        }
+    }
+
+    private func isButtonEnabled(_ button: ToolbarButton) -> Bool {
+        switch button {
+        case .addToFavorites: return settings.showAddToFavoritesButton
+        case .downloads: return settings.showDownloadsButton
+        case .bookmarks: return settings.showBookmarksButton
+        }
+    }
+
+    private func toggleButton(_ button: ToolbarButton) {
+        switch button {
+        case .addToFavorites: settings.showAddToFavoritesButton.toggle()
+        case .downloads: settings.showDownloadsButton.toggle()
+        case .bookmarks: settings.showBookmarksButton.toggle()
+        }
+    }
+}
+
+private struct ToolbarButtonRow: View {
+    let button: ToolbarButton
+    let isEnabled: Bool
+    let onToggle: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 12))
+                .foregroundColor(Color("TextMuted").opacity(0.5))
+
+            Toggle("", isOn: Binding(
+                get: { isEnabled },
+                set: { _ in onToggle() }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+
+            Image(systemName: button.icon)
+                .font(.system(size: 14))
+                .foregroundColor(isEnabled ? Color("Text") : Color("TextMuted"))
+                .frame(width: 20)
+
+            Text(button.displayName)
+                .font(.system(size: 13))
+                .foregroundColor(isEnabled ? Color("Text") : Color("TextMuted"))
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? Color("TabInactive") : Color("Bg"))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color("Border"), lineWidth: 1)
+        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
+private struct ToolbarButtonDropDelegate: DropDelegate {
+    let item: ToolbarButton
+    @Binding var items: [ToolbarButton]
+    @Binding var draggingItem: ToolbarButton?
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingItem = nil
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingItem = draggingItem,
+              draggingItem != item,
+              let fromIndex = items.firstIndex(of: draggingItem),
+              let toIndex = items.firstIndex(of: item) else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            items.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
     }
 }
 
