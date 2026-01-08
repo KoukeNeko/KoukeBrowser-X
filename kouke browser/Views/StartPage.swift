@@ -11,23 +11,13 @@ struct StartPage: View {
     var onNavigate: (String) -> Void
     @ObservedObject var bookmarkManager = BookmarkManager.shared
 
-    // Default favorites if no bookmarks exist
-    private let defaultFavorites: [(title: String, url: String, icon: String)] = [
-        ("Apple", "https://apple.com", ""),
-        ("iCloud", "https://icloud.com", "☁️"),
-        ("Google", "https://google.com", "G"),
-        ("Twitter", "https://x.com", "𝕏"),
-        ("GitHub", "https://github.com", "🐙"),
-        ("YouTube", "https://youtube.com", "▶️"),
-    ]
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer()
                     .frame(height: 80)
 
-                // Bookmarks Section (if any)
+                // Bookmarks Section
                 if !bookmarkManager.bookmarks.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Bookmarks")
@@ -50,33 +40,24 @@ struct StartPage: View {
                     }
                     .padding(.horizontal, 32)
                     .frame(maxWidth: 600)
-
-                    Spacer().frame(height: 40)
-                }
-
-                // Favorites Section
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Favorites")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color("TextMuted"))
-                        .textCase(.uppercase)
-                        .kerning(0.5)
-
-                    // Grid of favorites
-                    LazyVGrid(columns: [
-                        GridItem(.adaptive(minimum: 80, maximum: 100), spacing: 16)
-                    ], spacing: 16) {
-                        ForEach(defaultFavorites, id: \.url) { fav in
-                            FavoriteButton(
-                                title: fav.title,
-                                icon: fav.icon,
-                                action: { onNavigate(fav.url) }
-                            )
-                        }
+                } else {
+                    // Empty state when no bookmarks exist
+                    VStack(spacing: 16) {
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundColor(Color("TextMuted").opacity(0.5))
+                        
+                        Text("No bookmarks yet")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color("TextMuted"))
+                        
+                        Text("Press ⌘D to bookmark the current page")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color("TextMuted").opacity(0.7))
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 100)
                 }
-                .padding(.horizontal, 32)
-                .frame(maxWidth: 600)
 
                 Spacer()
             }
@@ -118,44 +99,6 @@ struct BookmarkButton: View {
 
                 // Title
                 Text(bookmark.title)
-                    .font(.system(size: 11))
-                    .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
-    }
-}
-
-struct FavoriteButton: View {
-    let title: String
-    let icon: String
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                // Icon container
-                ZStack {
-                    Rectangle()
-                        .fill(Color("CardBg"))
-                        .border(Color("Border"), width: 1)
-
-                    Text(icon)
-                        .font(.system(size: 20))
-                }
-                .frame(width: 64, height: 64) // Larger, square
-                .scaleEffect(isHovering ? 1.02 : 1.0)
-                .animation(.easeInOut(duration: 0.1), value: isHovering)
-
-                // Title
-                Text(title)
                     .font(.system(size: 11))
                     .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
                     .lineLimit(1)
