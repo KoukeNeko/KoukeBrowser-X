@@ -114,7 +114,8 @@ struct SheetSearchBar: View {
         .background(Color("CardBg"))
         .cornerRadius(6)
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
     }
 }
 
