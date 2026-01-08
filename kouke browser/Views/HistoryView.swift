@@ -16,56 +16,33 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("History")
-                    .font(.system(size: 18, weight: .semibold))
-
-                Spacer()
-
-                Button(action: { showingClearAlert = true }) {
-                    Text("Clear")
-                        .font(.system(size: 13))
-                        .foregroundColor(.red)
-                }
-                .buttonStyle(.plain)
-                .disabled(historyManager.historyItems.isEmpty)
-
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            // Header using shared component
+            SheetHeader(
+                title: "History",
+                onDismiss: onDismiss,
+                trailingButton: AnyView(
+                    Button(action: { showingClearAlert = true }) {
+                        Text("Clear")
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(historyManager.historyItems.isEmpty)
+                )
+            )
 
             Divider()
 
-            // Search bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color("TextMuted"))
-                TextField("Search history", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color("TextMuted"))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(Color("CardBg"))
-            .cornerRadius(6)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            // Search bar using shared component
+            SheetSearchBar(text: $searchText, placeholder: "Search history")
 
             // Content
             if filteredItems.isEmpty {
-                emptyState
+                SheetEmptyState(
+                    icon: "clock",
+                    title: searchText.isEmpty ? "No history yet" : "No results found",
+                    subtitle: searchText.isEmpty ? "Websites you visit will appear here" : nil
+                )
             } else {
                 historyList
             }
@@ -89,34 +66,13 @@ struct HistoryView: View {
         return historyManager.searchHistory(query: searchText)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "clock")
-                .font(.system(size: 48, weight: .light))
-                .foregroundColor(Color("TextMuted").opacity(0.5))
-
-            Text(searchText.isEmpty ? "No history yet" : "No results found")
-                .font(.system(size: 14))
-                .foregroundColor(Color("TextMuted"))
-
-            if searchText.isEmpty {
-                Text("Websites you visit will appear here")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color("TextMuted").opacity(0.7))
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private var historyList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 if searchText.isEmpty {
                     // Grouped by date
                     ForEach(historyManager.groupedByDate(), id: \.title) { group in
-                        Section(header: sectionHeader(group.title)) {
+                        Section(header: SheetSectionHeader(title: group.title)) {
                             ForEach(group.items) { item in
                                 HistoryRow(item: item, onNavigate: onNavigate)
                                     .contextMenu {
@@ -137,16 +93,6 @@ struct HistoryView: View {
             }
             .padding(.horizontal, 16)
         }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(Color("TextMuted"))
-            .textCase(.uppercase)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color("Bg"))
     }
 
     @ViewBuilder
