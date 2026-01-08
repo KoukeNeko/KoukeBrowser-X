@@ -75,8 +75,8 @@ struct WebViewContainer: NSViewRepresentable {
         // Enable developer extras for Web Inspector
         webView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
 
-        // Set User-Agent to Safari on macOS (more authentic for WebKit)
-        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        // Set User-Agent on macOS (more authentic for WebKit)
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Kouke/2026.01"
 
         // Register with ViewModel
         Task { @MainActor in
@@ -185,6 +185,14 @@ struct WebViewContainer: NSViewRepresentable {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
                 // Title and URL updates are now handled by KVO observers
+
+                // Record to browsing history
+                if let url = webView.url?.absoluteString {
+                    HistoryManager.shared.addHistoryItem(
+                        title: webView.title ?? "",
+                        url: url
+                    )
+                }
 
                 // Capture thumbnail after page loads with a slight delay for rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

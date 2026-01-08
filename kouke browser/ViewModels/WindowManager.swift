@@ -81,6 +81,8 @@ class WindowManager {
         windowViewModels[window.windowNumber] = viewModel
 
         // Clean up closed windows
+        // Capture windowNumber before the window is deallocated
+        let windowNumber = window.windowNumber
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
@@ -90,7 +92,7 @@ class WindowManager {
                   let closedWindow = notification.object as? NSWindow else { return }
             Task { @MainActor [weak self] in
                 self?.windows.removeAll { $0 == closedWindow }
-                self?.windowViewModels.removeValue(forKey: closedWindow.windowNumber)
+                self?.windowViewModels.removeValue(forKey: windowNumber)
             }
         }
     }
