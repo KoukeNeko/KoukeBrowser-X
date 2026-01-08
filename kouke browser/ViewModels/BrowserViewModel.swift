@@ -229,7 +229,8 @@ class BrowserViewModel: ObservableObject {
         if isLikelyURL(urlString) {
             if !urlString.hasPrefix("http://") &&
                !urlString.hasPrefix("https://") &&
-               !urlString.hasPrefix("about:") {
+               !urlString.hasPrefix("about:") &&
+               !urlString.hasPrefix("kouke:") {
                 urlString = "https://" + urlString
             }
         } else {
@@ -271,6 +272,42 @@ class BrowserViewModel: ObservableObject {
     func navigateFromStartPage(to url: String) {
         inputURL = url
         navigate()
+    }
+
+    /// Open settings page in a new tab
+    func openSettings() {
+        let newTab = Tab(title: "Settings", url: KoukeScheme.settings)
+        tabs.append(newTab)
+        switchToTab(newTab.id)
+    }
+
+    /// Open about page in a new tab
+    func openAbout() {
+        let newTab = Tab(title: "About Kouke", url: KoukeScheme.about)
+        tabs.append(newTab)
+        switchToTab(newTab.id)
+    }
+
+    /// Open a kouke: URL in a new tab (called from external URL scheme)
+    func openKoukeURL(_ urlString: String) {
+        guard KoukeScheme.isKoukeURL(urlString) else { return }
+
+        // Determine the title based on URL
+        let title: String
+        switch urlString {
+        case KoukeScheme.blank:
+            title = "New Tab"
+        case KoukeScheme.about:
+            title = "About Kouke"
+        case KoukeScheme.settings:
+            title = "Settings"
+        default:
+            title = "Kouke"
+        }
+
+        let newTab = Tab(title: title, url: urlString)
+        tabs.append(newTab)
+        switchToTab(newTab.id)
     }
 
     // MARK: - WebView Management
@@ -544,7 +581,7 @@ class BrowserViewModel: ObservableObject {
 
     private func isLikelyURL(_ input: String) -> Bool {
         // Has protocol
-        if input.hasPrefix("http://") || input.hasPrefix("https://") || input.hasPrefix("about:") {
+        if input.hasPrefix("http://") || input.hasPrefix("https://") || input.hasPrefix("about:") || input.hasPrefix("kouke:") {
             return true
         }
 

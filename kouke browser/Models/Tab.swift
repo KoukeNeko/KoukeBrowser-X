@@ -12,6 +12,23 @@ import AppKit
 import UIKit
 #endif
 
+// MARK: - Kouke URL Scheme
+
+/// Internal URL scheme for browser-specific pages
+enum KoukeScheme {
+    static let prefix = "kouke:"
+    static let blank = "kouke:blank"
+    static let about = "kouke:about"
+    static let settings = "kouke:settings"
+
+    /// Check if a URL uses the kouke: scheme
+    static func isKoukeURL(_ url: String) -> Bool {
+        url.hasPrefix(prefix)
+    }
+}
+
+// MARK: - Tab Model
+
 struct Tab: Identifiable, Equatable {
     let id: UUID
     var title: String
@@ -47,7 +64,7 @@ struct Tab: Identifiable, Equatable {
     
     /// Check if this tab is showing a special internal page
     var isSpecialPage: Bool {
-        url == "kouke:blank" || url.hasPrefix("kouke://")
+        KoukeScheme.isKoukeURL(url) || url.hasPrefix("kouke://")
     }
 
     /// Check if this is a kouke:// internal page
