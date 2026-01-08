@@ -20,6 +20,11 @@ struct SettingsView: View {
                     Label("General", systemImage: "gearshape")
                 }
 
+            AppearanceSection(settings: settings)
+                .tabItem {
+                    Label("Appearance", systemImage: "paintbrush")
+                }
+
             TabsSection(settings: settings)
                 .tabItem {
                     Label("Tabs", systemImage: "square.on.square")
@@ -109,32 +114,6 @@ struct GeneralSection: View {
 
             Divider().padding(.vertical, 8)
 
-            // Appearance
-            SettingsSection {
-                SettingsRow(label: "Appearance:") {
-                    Picker("", selection: $settings.theme) {
-                        ForEach(AppTheme.allCases, id: \.rawValue) { theme in
-                            Text(theme.displayName).tag(theme)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 140)
-                }
-
-                SettingsRow(label: "Default font size:") {
-                     Picker("", selection: $settings.fontSize) {
-                        ForEach([12, 13, 14, 15, 16, 18, 20, 24], id: \.self) { size in
-                            Text("\(size)").tag(size)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 60)
-                }
-            }
-
-            Divider().padding(.vertical, 8)
-
             SettingsSection {
                 SettingsRow(label: "File download location:") {
                     Picker("", selection: $settings.downloadLocation) {
@@ -159,6 +138,60 @@ struct GeneralSection: View {
                 SettingsRow(label: "") {
                     Toggle("Open \"safe\" files after downloading", isOn: $settings.openSafeFilesAfterDownload)
                 }
+            }
+        }
+        .padding()
+    }
+}
+
+// MARK: - Appearance Section
+
+struct AppearanceSection: View {
+    @ObservedObject var settings: BrowserSettings
+
+    var body: some View {
+        Form {
+            // Theme
+            SettingsSection {
+                SettingsRow(label: "Theme:") {
+                    Picker("", selection: $settings.theme) {
+                        ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                            Text(theme.displayName).tag(theme)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                }
+            }
+
+            Divider().padding(.vertical, 8)
+
+            // Toolbar buttons
+            SettingsSection {
+                Text("Toolbar Buttons")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color("TextMuted"))
+
+                SettingsRow(label: "Show Downloads button:") {
+                    Toggle("", isOn: $settings.showDownloadsButton)
+                        .labelsHidden()
+                }
+
+                SettingsRow(label: "Show Bookmarks button:") {
+                    Toggle("", isOn: $settings.showBookmarksButton)
+                        .labelsHidden()
+                }
+
+                SettingsRow(label: "Show Add to Favorites button:") {
+                    Toggle("", isOn: $settings.showAddToFavoritesButton)
+                        .labelsHidden()
+                }
+
+                Text("When enabled, buttons appear in the address bar and show a popover when clicked. When disabled, use menu or keyboard shortcuts to open in a separate window.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.top, 4)
             }
         }
         .padding()

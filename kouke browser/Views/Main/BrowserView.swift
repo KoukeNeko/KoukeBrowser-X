@@ -294,11 +294,16 @@ struct HistoryMenuModifier: ViewModifier {
 struct BookmarksMenuModifier: ViewModifier {
     @Binding var showBookmarks: Bool
     @Binding var showBookmarkAllTabsAlert: Bool
+    @ObservedObject var settings = BrowserSettings.shared
 
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .showBookmarks)) { _ in
-                showBookmarks = true
+                // Only show sheet if toolbar button is hidden
+                // When button is visible, AddressBar handles the popover
+                if !settings.showBookmarksButton {
+                    showBookmarks = true
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .bookmarkAllTabs)) { _ in
                 showBookmarkAllTabsAlert = true
@@ -308,11 +313,16 @@ struct BookmarksMenuModifier: ViewModifier {
 
 struct DownloadsMenuModifier: ViewModifier {
     @Binding var showDownloads: Bool
+    @ObservedObject var settings = BrowserSettings.shared
 
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
-                showDownloads = true
+                // Only show sheet if toolbar button is hidden
+                // When button is visible, AddressBar handles the popover
+                if !settings.showDownloadsButton {
+                    showDownloads = true
+                }
             }
     }
 }

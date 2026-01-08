@@ -317,6 +317,19 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(blockAllCookies, forKey: "blockAllCookies") }
     }
 
+    // Toolbar appearance settings
+    @Published var showDownloadsButton: Bool {
+        didSet { defaults.set(showDownloadsButton, forKey: "showDownloadsButton") }
+    }
+
+    @Published var showBookmarksButton: Bool {
+        didSet { defaults.set(showBookmarksButton, forKey: "showBookmarksButton") }
+    }
+
+    @Published var showAddToFavoritesButton: Bool {
+        didSet { defaults.set(showAddToFavoritesButton, forKey: "showAddToFavoritesButton") }
+    }
+
     // Advanced settings
     @Published var showFullWebsiteAddress: Bool {
         didSet { defaults.set(showFullWebsiteAddress, forKey: "showFullWebsiteAddress") }
@@ -474,6 +487,11 @@ class BrowserSettings: ObservableObject {
 
         hideIPFromTrackers = defaults.bool(forKey: "hideIPFromTrackers")
         blockAllCookies = defaults.bool(forKey: "blockAllCookies")
+
+        // Toolbar appearance settings - default to false (hidden)
+        showDownloadsButton = defaults.bool(forKey: "showDownloadsButton")
+        showBookmarksButton = defaults.bool(forKey: "showBookmarksButton")
+        showAddToFavoritesButton = defaults.bool(forKey: "showAddToFavoritesButton")
 
         // Advanced settings
         showFullWebsiteAddress = defaults.bool(forKey: "showFullWebsiteAddress")
