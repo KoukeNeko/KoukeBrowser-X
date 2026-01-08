@@ -33,7 +33,7 @@ class FaviconService: ObservableObject {
         }
 
         // Return Google favicon as initial fallback, but trigger async check
-        let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=32")
+        let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=128")
         
         // Start async check for apple-touch-icon if not already checking
         if !checkingDomains.contains(host) {
@@ -72,7 +72,7 @@ class FaviconService: ObservableObject {
         }
 
         // Fallback to Google's favicon service
-        let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=32")
+        let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=128")
         if let favicon = googleFavicon {
             urlCache[host] = favicon
         }
@@ -86,7 +86,7 @@ class FaviconService: ObservableObject {
             objectWillChange.send()
         } else {
             // Cache the Google fallback
-            if let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=32") {
+            if let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=128") {
                 urlCache[host] = googleFavicon
             }
         }
@@ -104,14 +104,16 @@ class FaviconService: ObservableObject {
         return await checkStaticAppleTouchIconPaths(for: host)
     }
 
-    /// Parse HTML to find apple-touch-icon link tags and return the largest one
+    /// Parse HTML to find apple-touch-icon link tags and return the largest icon
     private func parseHTMLForAppleTouchIcon(host: String) async -> URL? {
         guard let pageURL = URL(string: "https://\(host)") else { return nil }
 
         var request = URLRequest(url: pageURL)
         request.timeoutInterval = 5
-        // Only fetch the head section to save bandwidth
+        // Only fetch the head section if possible, but GET is safer for HTML
+        request.httpMethod = "GET"
         request.setValue("text/html", forHTTPHeaderField: "Accept")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -226,6 +228,7 @@ class FaviconService: ObservableObject {
             var request = URLRequest(url: iconURL)
             request.httpMethod = "HEAD"
             request.timeoutInterval = 3
+            request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
 
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
