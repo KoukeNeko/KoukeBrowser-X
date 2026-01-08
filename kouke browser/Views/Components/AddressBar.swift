@@ -85,22 +85,6 @@ struct AddressBar: View {
                     }
             }
 
-            // Downloads button (conditional)
-            if settings.showDownloadsButton {
-                Button(action: { showingDownloads = true }) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-                .padding(6)
-                .contentShape(Rectangle())
-                .help("Show Downloads")
-                .popover(isPresented: $showingDownloads, arrowEdge: .bottom) {
-                    DownloadsView(onDismiss: { showingDownloads = false })
-                }
-            }
-
             // Add to Favorites button (conditional)
             if settings.showAddToFavoritesButton {
                 Button(action: toggleBookmark) {
@@ -118,6 +102,22 @@ struct AddressBar: View {
                             bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
                         }
                     }
+                }
+            }
+
+            // Downloads button (conditional)
+            if settings.showDownloadsButton {
+                Button(action: { showingDownloads = true }) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help("Show Downloads")
+                .popover(isPresented: $showingDownloads, arrowEdge: .bottom) {
+                    DownloadsView(onDismiss: { showingDownloads = false })
                 }
             }
 
