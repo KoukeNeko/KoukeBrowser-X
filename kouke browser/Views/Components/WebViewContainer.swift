@@ -9,6 +9,37 @@ import SwiftUI
 import WebKit
 import CommonCrypto
 
+// MARK: - Certificate Fetch Delegate
+
+/// URLSession delegate for fetching SSL certificate information
+private class CertificateFetchDelegate: NSObject, URLSessionDelegate {
+    private let onCertificateReceived: (SecTrust) -> Void
+    private var hasCaptured = false
+
+    init(onCertificateReceived: @escaping (SecTrust) -> Void) {
+        self.onCertificateReceived = onCertificateReceived
+        super.init()
+    }
+
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // Only capture once
+        if !hasCaptured {
+            hasCaptured = true
+            onCertificateReceived(serverTrust)
+        }
+
+        completionHandler(.performDefaultHandling, nil)
+    }
+}
+
+// MARK: - WebView Container
+
 struct WebViewContainer: NSViewRepresentable {
     let tabId: UUID
     let url: String
@@ -56,7 +87,7 @@ struct WebViewContainer: NSViewRepresentable {
         // Intercepts navigator.credentials.create and get to send to native app
         let webAuthnPolyfill = """
         if (!navigator.credentials) { navigator.credentials = {}; }
-        
+
         navigator.credentials.create = async function(options) {
             console.log("WebAuthn: create called", options);
             // TODO: Serialize options (ArrayBuffers to Base64)
@@ -258,6 +289,18 @@ struct WebViewContainer: NSViewRepresentable {
             return nil
         }
 
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            // Fetch certificate info after navigation commits (page starts loading)
+            // This ensures we have a valid URL to query
+            guard let url = webView.url, url.scheme == "https" else { return }
+
+            // Only fetch if we haven't captured certificate yet
+            if !hasCapturedCertificate {
+                hasCapturedCertificate = true
+                fetchCertificateInfo(for: url)
+            }
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
@@ -306,6 +349,33 @@ struct WebViewContainer: NSViewRepresentable {
             }
 
             completionHandler(.performDefaultHandling, nil)
+        }
+
+        private func fetchCertificateInfo(for url: URL) {
+            let host = url.host ?? ""
+
+            // Create a URLSession that captures certificate info
+            let sessionConfig = URLSessionConfiguration.ephemeral
+            sessionConfig.timeoutIntervalForRequest = 10
+
+            let delegate = CertificateFetchDelegate { [weak self] serverTrust in
+                guard let self = self else { return }
+                let securityInfo = self.extractSecurityInfo(from: serverTrust, host: host)
+                Task { @MainActor in
+                    self.parent.viewModel.updateTabSecurityInfo(securityInfo, for: self.parent.tabId)
+                }
+            }
+
+            let session = URLSession(configuration: sessionConfig, delegate: delegate, delegateQueue: nil)
+
+            // Make a HEAD request to get certificate without downloading content
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD"
+
+            let task = session.dataTask(with: request) { _, _, _ in
+                // We don't need the response - certificate is captured in delegate
+            }
+            task.resume()
         }
 
         private func isHostMatch(challengeHost: String, mainHost: String) -> Bool {
@@ -418,6 +488,25 @@ struct WebViewContainer: NSViewRepresentable {
                         }
                     }
                 }
+
+                // Extract issuer from certificate values if not already obtained from issuer cert
+                if issuer == "Unknown" {
+                    if let issuerData = certValues[kSecOIDX509V1IssuerName as String] as? [String: Any],
+                       let issuerItems = issuerData[kSecPropertyKeyValue as String] as? [[String: Any]] {
+                        // Look for Common Name (CN) or Organization (O) in issuer
+                        for item in issuerItems {
+                            if let label = item[kSecPropertyKeyLabel as String] as? String,
+                               let value = item[kSecPropertyKeyValue as String] as? String {
+                                if label == "2.5.4.3" || label.contains("CN") || label.contains("Common Name") {
+                                    issuer = value
+                                    break
+                                } else if (label == "2.5.4.10" || label.contains("O") || label.contains("Organization")) && issuer == "Unknown" {
+                                    issuer = value
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             return CertificateInfo(
@@ -471,7 +560,7 @@ struct WebViewContainer: NSViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let jsonString = message.body as? String, let webView = webView, let window = webView.window else { return }
-            
+
             if message.name == "webAuthnCreate" {
                 webAuthnManager.performRegistration(jsonRequest: jsonString, in: window) { result, error in
                     // Return result to JS (TODO: invoke JS callback)
