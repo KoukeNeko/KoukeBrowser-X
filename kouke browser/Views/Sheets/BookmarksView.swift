@@ -543,28 +543,6 @@ struct AddBookmarkPopover: View {
             // Folder list
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // Save to current location button
-                    Button(action: {
-                        onSave(title, initialURL, currentFolderId)
-                        dismiss()
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.blue)
-
-                            Text("Add to \"\(currentFolderName)\"")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(Color("Text"))
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 16)
-                        .background(Color("CardBg").opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
-
                     // Subfolders
                     ForEach(bookmarkManager.folders(in: currentFolderId)) { folder in
                         FolderSelectionRow(
