@@ -65,6 +65,9 @@ struct CompactTabBar: View {
                 let availableWidth = geometry.size.width - 80 - 60 - 140
                 let tabWidth = calculateTabWidth(totalAvailableWidth: availableWidth)
 
+                let isDark = settings.theme == .dark
+                let _ = NSLog("🟡 CompactTabBar body - isDark: %@", isDark ? "true" : "false")
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 0) {
                         ForEach(visibleTabs) { tab in
@@ -94,9 +97,10 @@ struct CompactTabBar: View {
                                 inputURL: viewModel.inputURL,
                                 onInputURLChange: { url in viewModel.inputURL = url },
                                 onNavigate: { viewModel.navigate() },
-                                isDarkTheme: settings.theme == .dark
+                                isDarkTheme: isDark
                             )
                             .frame(width: tabWidth)
+                            .id("\(tab.id)-\(isDark)")  // Force view recreation on theme change
                         }
                     }
                 }

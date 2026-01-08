@@ -28,10 +28,11 @@ struct CompactDraggableTabView: NSViewRepresentable {
     let isDarkTheme: Bool
 
     func makeNSView(context: Context) -> CompactDraggableTabContainerView {
+        NSLog("⚪ makeNSView called - isDarkTheme: %@", isDarkTheme ? "true" : "false")
         let container = CompactDraggableTabContainerView()
         // Initialize with correct theme
         container.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme)
-        
+
         container.configure(
             tab: tab,
             isActive: isActive,
@@ -57,6 +58,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: CompactDraggableTabContainerView, context: Context) {
+        NSLog("⚪ updateNSView called - isActive: %@, isDarkTheme: %@", isActive ? "true" : "false", isDarkTheme ? "true" : "false")
         nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme)
     }
 }
@@ -367,11 +369,13 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         self.inputURL = inputURL
         self.inputURLChangeAction = onInputURLChange
         self.navigateAction = onNavigate
-
         updateUI()
     }
 
     func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, isDarkTheme: Bool = false) {
+        let oldTheme = self.isDarkTheme
+        NSLog("🔵 updateTab - isDarkTheme: %@ (was: %@)", isDarkTheme ? "true" : "false", oldTheme ? "true" : "false")
+
         self.tabId = tab.id
         self.tabTitle = tab.title
         self.tabURL = tab.url
@@ -395,35 +399,64 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
 
     private var isDarkTheme: Bool = false
 
+    // Hardcoded colors to avoid Asset Catalog resolution issues
+    private var tabActiveColor: NSColor {
+        isDarkTheme ? NSColor(red: 0x3A/255.0, green: 0x3A/255.0, blue: 0x3A/255.0, alpha: 1.0)
+                    : NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
+    }
+
+    private var tabInactiveColor: NSColor {
+        isDarkTheme ? NSColor(red: 0x1A/255.0, green: 0x1A/255.0, blue: 0x1A/255.0, alpha: 1.0)
+                    : NSColor(red: 0xD8/255.0, green: 0xD8/255.0, blue: 0xD8/255.0, alpha: 1.0)
+    }
+
+    private var borderColor: NSColor {
+        isDarkTheme ? NSColor(red: 0x3C/255.0, green: 0x3C/255.0, blue: 0x3C/255.0, alpha: 1.0)
+                    : NSColor(red: 0xD1/255.0, green: 0xD1/255.0, blue: 0xD1/255.0, alpha: 1.0)
+    }
+
+    private var textColor: NSColor {
+        isDarkTheme ? NSColor(red: 0xE0/255.0, green: 0xE0/255.0, blue: 0xE0/255.0, alpha: 1.0)
+                    : NSColor(red: 0x1E/255.0, green: 0x1E/255.0, blue: 0x1E/255.0, alpha: 1.0)
+    }
+
+    private var textMutedColor: NSColor {
+        isDarkTheme ? NSColor(red: 0x80/255.0, green: 0x80/255.0, blue: 0x80/255.0, alpha: 1.0)
+                    : NSColor(red: 0x6B/255.0, green: 0x6B/255.0, blue: 0x6B/255.0, alpha: 1.0)
+    }
+
     private func updateUI() {
-        // Force the appearance on the view itself
-        self.appearance = NSAppearance(named: isDarkTheme ? .darkAqua : .aqua)
-        
-        // Resolve colors - now that self.appearance is set, named colors should resolve correctly
-        // We still use performAsCurrentDrawingAppearance just to be safe for CALayer changes
-        self.appearance?.performAsCurrentDrawingAppearance { [self] in
-            // Update separator color (always, even without tab)
-            separatorView?.layer?.backgroundColor = NSColor(named: "Border")?.cgColor
+        NSLog("🟢 updateUI - isDarkTheme: %@, isActive: %@", isDarkTheme ? "true" : "false", isActive ? "true" : "false")
 
-            // Background - only show active style if showActiveStyle is true
-            if isActive && showActiveStyle {
-                backgroundView?.layer?.backgroundColor = NSColor(named: "TabActive")?.cgColor
-            } else if isHovering && showActiveStyle {
-                backgroundView?.layer?.backgroundColor = NSColor(named: "TabInactive")?.cgColor
-            } else {
-                backgroundView?.layer?.backgroundColor = NSColor.clear.cgColor
-            }
+        // Use CATransaction to force immediate layer updates
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
 
-            // Title color
-            titleLabel?.textColor = isActive ? NSColor(named: "Text") : NSColor(named: "TextMuted")
+        // Update separator color (always, even without tab)
+        separatorView?.layer?.backgroundColor = borderColor.cgColor
 
-            // Close button tint
-            closeButton?.contentTintColor = NSColor(named: "TextMuted")?.withAlphaComponent(isHovering ? 1.0 : 0.4)
+        // Background - only show active style if showActiveStyle is true
+        if isActive && showActiveStyle {
+            let color = tabActiveColor
+            NSLog("🟢 Setting ACTIVE bg - isDark: %@, R:%.2f G:%.2f B:%.2f", isDarkTheme ? "T" : "F", color.redComponent, color.greenComponent, color.blueComponent)
+            backgroundView?.layer?.backgroundColor = color.cgColor
+        } else if isHovering && showActiveStyle {
+            backgroundView?.layer?.backgroundColor = tabInactiveColor.cgColor
+        } else {
+            backgroundView?.layer?.backgroundColor = NSColor.clear.cgColor
+        }
 
-            // Favicon tint for default icon
-            if currentTab?.faviconURL == nil {
-                faviconView?.contentTintColor = NSColor(named: "TextMuted")
-            }
+        CATransaction.commit()
+
+        // Title color
+        titleLabel?.textColor = isActive ? textColor : textMutedColor
+
+        // Close button tint
+        closeButton?.contentTintColor = textMutedColor.withAlphaComponent(isHovering ? 1.0 : 0.4)
+
+        // Favicon tint for default icon
+        if currentTab?.faviconURL == nil {
+            faviconView?.contentTintColor = textMutedColor
         }
 
         guard let tab = currentTab else { return }
@@ -479,6 +512,22 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         closeButton?.isHidden = !(isHovering && canClose)
 
         invalidateIntrinsicContentSize()
+
+        // Force layer to redraw immediately
+        backgroundView?.layer?.setNeedsDisplay()
+        separatorView?.layer?.setNeedsDisplay()
+        needsDisplay = true
+
+        // Force display update on main thread
+        DispatchQueue.main.async { [weak self] in
+            self?.displayIfNeeded()
+            self?.backgroundView?.displayIfNeeded()
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        NSLog("🔴 viewDidChangeEffectiveAppearance - isDarkTheme: %@", isDarkTheme ? "true" : "false")
     }
 
     private func loadFavicon(from url: URL) {
@@ -629,34 +678,29 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         let size = NSSize(width: 140, height: 28)
         let image = NSImage(size: size)
 
-        let appearanceName: NSAppearance.Name = isDarkTheme ? .darkAqua : .aqua
-        let appearance = NSAppearance(named: appearanceName)
-        
         image.lockFocus()
 
-        appearance?.performAsCurrentDrawingAppearance {
-            (NSColor(named: "TabActive") ?? .windowBackgroundColor).withAlphaComponent(0.9).setFill()
-            let path = NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 6, yRadius: 6)
-            path.fill()
+        tabActiveColor.withAlphaComponent(0.9).setFill()
+        let path = NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 6, yRadius: 6)
+        path.fill()
 
-            (NSColor(named: "Border") ?? .separatorColor).setStroke()
-            path.lineWidth = 1
-            path.stroke()
+        borderColor.setStroke()
+        path.lineWidth = 1
+        path.stroke()
 
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.alignment = .left
-            paragraphStyle.lineBreakMode = .byTruncatingTail
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .left
+        paragraphStyle.lineBreakMode = .byTruncatingTail
 
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: NSColor(named: "Text") ?? .labelColor,
-                .paragraphStyle: paragraphStyle
-            ]
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraphStyle
+        ]
 
-            let titleRect = NSRect(x: 24, y: (size.height - 14) / 2, width: size.width - 36, height: 14)
-            tabTitle.draw(in: titleRect, withAttributes: attributes)
-        }
-        
+        let titleRect = NSRect(x: 24, y: (size.height - 14) / 2, width: size.width - 36, height: 14)
+        tabTitle.draw(in: titleRect, withAttributes: attributes)
+
         image.unlockFocus()
 
         return image
