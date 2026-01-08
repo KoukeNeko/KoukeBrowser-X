@@ -75,8 +75,8 @@ struct WebViewContainer: NSViewRepresentable {
         // Enable developer extras for Web Inspector
         webView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
 
-        // Set User-Agent to mimic Chrome on macOS for proper rendering
-        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        // Set User-Agent to Safari on macOS (more authentic for WebKit)
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
         // Register with ViewModel
         Task { @MainActor in
