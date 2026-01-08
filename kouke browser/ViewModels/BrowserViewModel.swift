@@ -130,35 +130,40 @@ class BrowserViewModel: ObservableObject {
     }
 
     func closeTab(_ id: UUID) {
-        // If this is the last tab, show confirmation dialog and close window
+        // If this is the last tab, close window directly without dialog
         if tabs.count == 1 {
-            let alert = NSAlert()
-            alert.messageText = "Close Window?"
-            alert.informativeText = "This is the last tab. Closing it will close the window."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Close")
-            alert.addButton(withTitle: "Cancel")
+            // Clean up first
+            webViews.removeValue(forKey: id)
 
-            if alert.runModal() == .alertFirstButtonReturn {
-                // Close the window
-                NSApp.keyWindow?.close()
+            // Close the window - this will deallocate everything
+            if let window = NSApp.keyWindow {
+                window.close()
             }
             return
         }
 
-        if let index = tabs.firstIndex(where: { $0.id == id }) {
-            // Remove webview
-            webViews.removeValue(forKey: id)
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
 
-            // Remove tab
-            tabs.remove(at: index)
+        // Calculate new active tab index before removing
+        let newActiveIndex: Int
+        if activeTabId == id {
+            // If closing active tab, switch to adjacent tab
+            newActiveIndex = index > 0 ? index - 1 : 0
+        } else {
+            newActiveIndex = -1 // Don't need to switch
+        }
 
-            // Switch to adjacent tab if closing active tab
-            if activeTabId == id {
-                let newIndex = min(index, tabs.count - 1)
-                activeTabId = tabs[newIndex].id
-                inputURL = tabs[newIndex].url
-            }
+        // Remove webview
+        webViews.removeValue(forKey: id)
+
+        // Remove tab
+        tabs.remove(at: index)
+
+        // Switch to adjacent tab if closing active tab
+        if newActiveIndex >= 0 && !tabs.isEmpty {
+            let safeIndex = min(newActiveIndex, tabs.count - 1)
+            activeTabId = tabs[safeIndex].id
+            inputURL = tabs[safeIndex].url
         }
     }
 
