@@ -198,7 +198,7 @@ struct CompactTabBar: View {
 
     private func detachTabToNewWindow(tabId: UUID, at screenPoint: NSPoint) {
         guard let result = viewModel.detachTab(tabId) else { return }
-        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: screenPoint)
+        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: Optional(screenPoint))
     }
 
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
@@ -235,7 +235,7 @@ struct CompactTabBar: View {
 
     private func toggleBookmark() {
         guard let tab = viewModel.activeTab, !tab.isSpecialPage else { return }
-        
+
         if isCurrentPageBookmarked {
             bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
         } else {

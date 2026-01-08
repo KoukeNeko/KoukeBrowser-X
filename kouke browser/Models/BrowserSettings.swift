@@ -88,6 +88,48 @@ enum TabBarStyle: String, CaseIterable {
     }
 }
 
+enum DownloadLocation: String, CaseIterable {
+    case downloads = "downloads"
+    case askEachTime = "ask"
+
+    var displayName: String {
+        switch self {
+        case .downloads: return "Downloads"
+        case .askEachTime: return "Ask for each file"
+        }
+    }
+}
+
+enum RemoveDownloadItems: String, CaseIterable {
+    case afterOneDay = "after_one_day"
+    case whenKoukeQuits = "when_quit"
+    case uponSuccessfulDownload = "upon_success"
+    case manually = "manually"
+
+    var displayName: String {
+        switch self {
+        case .afterOneDay: return "After one day"
+        case .whenKoukeQuits: return "When Kouke quits"
+        case .uponSuccessfulDownload: return "Upon successful download"
+        case .manually: return "Manually"
+        }
+    }
+}
+
+enum OpenPagesInTabs: String, CaseIterable {
+    case never = "never"
+    case automatically = "automatically"
+    case always = "always"
+
+    var displayName: String {
+        switch self {
+        case .never: return "Never"
+        case .automatically: return "Automatically"
+        case .always: return "Always"
+        }
+    }
+}
+
 class BrowserSettings: ObservableObject {
     static let shared = BrowserSettings()
 
@@ -145,6 +187,79 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(disableImages, forKey: "disableImages") }
     }
 
+    @Published var showDeveloperMenu: Bool {
+        didSet { defaults.set(showDeveloperMenu, forKey: "showDeveloperMenu") }
+    }
+
+    // Download settings
+    @Published var downloadLocation: DownloadLocation {
+        didSet { defaults.set(downloadLocation.rawValue, forKey: "downloadLocation") }
+    }
+
+    @Published var removeDownloadItems: RemoveDownloadItems {
+        didSet { defaults.set(removeDownloadItems.rawValue, forKey: "removeDownloadItems") }
+    }
+
+    // Tab behavior settings
+    @Published var openPagesInTabs: OpenPagesInTabs {
+        didSet { defaults.set(openPagesInTabs.rawValue, forKey: "openPagesInTabs") }
+    }
+
+    @Published var openLinksInBackground: Bool {
+        didSet { defaults.set(openLinksInBackground, forKey: "openLinksInBackground") }
+    }
+
+    @Published var commandClickOpensNewTab: Bool {
+        didSet { defaults.set(commandClickOpensNewTab, forKey: "commandClickOpensNewTab") }
+    }
+
+    // Search settings
+    @Published var includeSearchSuggestions: Bool {
+        didSet { defaults.set(includeSearchSuggestions, forKey: "includeSearchSuggestions") }
+    }
+
+    @Published var includeKoukeSuggestions: Bool {
+        didSet { defaults.set(includeKoukeSuggestions, forKey: "includeKoukeSuggestions") }
+    }
+
+    @Published var enableQuickWebsiteSearch: Bool {
+        didSet { defaults.set(enableQuickWebsiteSearch, forKey: "enableQuickWebsiteSearch") }
+    }
+
+    @Published var preloadTopHit: Bool {
+        didSet { defaults.set(preloadTopHit, forKey: "preloadTopHit") }
+    }
+
+    @Published var showFavoritesInSearch: Bool {
+        didSet { defaults.set(showFavoritesInSearch, forKey: "showFavoritesInSearch") }
+    }
+
+    // Privacy settings
+    @Published var preventCrossSiteTracking: Bool {
+        didSet { defaults.set(preventCrossSiteTracking, forKey: "preventCrossSiteTracking") }
+    }
+
+    @Published var hideIPFromTrackers: Bool {
+        didSet { defaults.set(hideIPFromTrackers, forKey: "hideIPFromTrackers") }
+    }
+
+    @Published var blockAllCookies: Bool {
+        didSet { defaults.set(blockAllCookies, forKey: "blockAllCookies") }
+    }
+
+    // Advanced settings
+    @Published var showFullWebsiteAddress: Bool {
+        didSet { defaults.set(showFullWebsiteAddress, forKey: "showFullWebsiteAddress") }
+    }
+
+    @Published var minimumFontSize: Int {
+        didSet { defaults.set(minimumFontSize, forKey: "minimumFontSize") }
+    }
+
+    @Published var useMinimumFontSize: Bool {
+        didSet { defaults.set(useMinimumFontSize, forKey: "useMinimumFontSize") }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -185,6 +300,93 @@ class BrowserSettings: ObservableObject {
         // Developer settings
         disableJavaScript = defaults.bool(forKey: "disableJavaScript")
         disableImages = defaults.bool(forKey: "disableImages")
+
+        // Show developer menu defaults to true
+        if defaults.object(forKey: "showDeveloperMenu") != nil {
+            showDeveloperMenu = defaults.bool(forKey: "showDeveloperMenu")
+        } else {
+            showDeveloperMenu = true
+        }
+
+        // Download settings
+        if let downloadLocationRaw = defaults.string(forKey: "downloadLocation"),
+           let loadedDownloadLocation = DownloadLocation(rawValue: downloadLocationRaw) {
+            downloadLocation = loadedDownloadLocation
+        } else {
+            downloadLocation = .downloads
+        }
+
+        if let removeDownloadItemsRaw = defaults.string(forKey: "removeDownloadItems"),
+           let loadedRemoveDownloadItems = RemoveDownloadItems(rawValue: removeDownloadItemsRaw) {
+            removeDownloadItems = loadedRemoveDownloadItems
+        } else {
+            removeDownloadItems = .afterOneDay
+        }
+
+        // Tab behavior settings
+        if let openPagesInTabsRaw = defaults.string(forKey: "openPagesInTabs"),
+           let loadedOpenPagesInTabs = OpenPagesInTabs(rawValue: openPagesInTabsRaw) {
+            openPagesInTabs = loadedOpenPagesInTabs
+        } else {
+            openPagesInTabs = .automatically
+        }
+
+        openLinksInBackground = defaults.bool(forKey: "openLinksInBackground")
+
+        if defaults.object(forKey: "commandClickOpensNewTab") != nil {
+            commandClickOpensNewTab = defaults.bool(forKey: "commandClickOpensNewTab")
+        } else {
+            commandClickOpensNewTab = true
+        }
+
+        // Search settings - default to true for better UX
+        if defaults.object(forKey: "includeSearchSuggestions") != nil {
+            includeSearchSuggestions = defaults.bool(forKey: "includeSearchSuggestions")
+        } else {
+            includeSearchSuggestions = true
+        }
+
+        if defaults.object(forKey: "includeKoukeSuggestions") != nil {
+            includeKoukeSuggestions = defaults.bool(forKey: "includeKoukeSuggestions")
+        } else {
+            includeKoukeSuggestions = true
+        }
+
+        if defaults.object(forKey: "enableQuickWebsiteSearch") != nil {
+            enableQuickWebsiteSearch = defaults.bool(forKey: "enableQuickWebsiteSearch")
+        } else {
+            enableQuickWebsiteSearch = true
+        }
+
+        if defaults.object(forKey: "preloadTopHit") != nil {
+            preloadTopHit = defaults.bool(forKey: "preloadTopHit")
+        } else {
+            preloadTopHit = true
+        }
+
+        if defaults.object(forKey: "showFavoritesInSearch") != nil {
+            showFavoritesInSearch = defaults.bool(forKey: "showFavoritesInSearch")
+        } else {
+            showFavoritesInSearch = true
+        }
+
+        // Privacy settings - default to safer options
+        if defaults.object(forKey: "preventCrossSiteTracking") != nil {
+            preventCrossSiteTracking = defaults.bool(forKey: "preventCrossSiteTracking")
+        } else {
+            preventCrossSiteTracking = true
+        }
+
+        hideIPFromTrackers = defaults.bool(forKey: "hideIPFromTrackers")
+        blockAllCookies = defaults.bool(forKey: "blockAllCookies")
+
+        // Advanced settings
+        showFullWebsiteAddress = defaults.bool(forKey: "showFullWebsiteAddress")
+
+        let savedMinFontSize = defaults.integer(forKey: "minimumFontSize")
+        minimumFontSize = savedMinFontSize > 0 ? savedMinFontSize : 9
+
+        useMinimumFontSize = defaults.bool(forKey: "useMinimumFontSize")
 
         // Apply saved theme on startup
         applyTheme()

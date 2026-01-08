@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @StateObject private var settings = BrowserSettings.shared
+    @ObservedObject private var settings = BrowserSettings.shared
 
     // Fixed width for the label column to align everything perfectly like Safari
     static let labelWidth: CGFloat = 160
@@ -35,7 +35,7 @@ struct SettingsView: View {
                     Label("Privacy", systemImage: "hand.raised")
                 }
 
-            AdvancedSection()
+            AdvancedSection(settings: settings)
                 .tabItem {
                     Label("Advanced", systemImage: "slider.horizontal.3")
                 }
@@ -54,7 +54,7 @@ struct GeneralSection: View {
         Form {
             // Startup
             SettingsSection {
-                SettingsRow(label: "Safari opens with:") {
+                SettingsRow(label: "Kouke opens with:") {
                     Picker("", selection: $settings.startupBehavior) {
                         ForEach(StartupBehavior.allCases, id: \.rawValue) { behavior in
                             Text(behavior.displayName).tag(behavior)
@@ -84,7 +84,7 @@ struct GeneralSection: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.menu) // Safari uses a menu often, or segmented.
+                    .pickerStyle(.menu)
                     .frame(width: 140)
                 }
 
@@ -103,20 +103,20 @@ struct GeneralSection: View {
 
             SettingsSection {
                 SettingsRow(label: "File download location:") {
-                     Picker("", selection: .constant("Downloads")) {
-                        Text("Downloads").tag("Downloads")
-                        Text("Ask for each file").tag("Ask")
+                    Picker("", selection: $settings.downloadLocation) {
+                        ForEach(DownloadLocation.allCases, id: \.rawValue) { location in
+                            Text(location.displayName).tag(location)
+                        }
                     }
                     .labelsHidden()
                     .frame(width: 200)
                 }
 
                 SettingsRow(label: "Remove download list items:") {
-                     Picker("", selection: .constant("After one day")) {
-                        Text("After one day").tag("After one day")
-                        Text("When Safari quits").tag("Quit")
-                        Text("Upon successful download").tag("Success")
-                        Text("Manually").tag("Manually")
+                    Picker("", selection: $settings.removeDownloadItems) {
+                        ForEach(RemoveDownloadItems.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
                     }
                     .labelsHidden()
                     .frame(width: 200)
@@ -168,22 +168,22 @@ struct TabsSection: View {
 
             SettingsSection {
                 SettingsRow(label: "Open pages in tabs instead of windows:") {
-                     Picker("", selection: .constant("Automatically")) {
-                        Text("Never").tag("Never")
-                        Text("Automatically").tag("Automatically")
-                        Text("Always").tag("Always")
+                    Picker("", selection: $settings.openPagesInTabs) {
+                        ForEach(OpenPagesInTabs.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
                     }
                     .labelsHidden()
                     .frame(width: 160)
                 }
 
                 SettingsRow(label: "Clicking a link opens a new tab in the background:") {
-                     Toggle("", isOn: .constant(false))
+                    Toggle("", isOn: $settings.openLinksInBackground)
                         .labelsHidden()
                 }
 
                 SettingsRow(label: "Command-Click opens a link in a new tab:") {
-                     Toggle("", isOn: .constant(true))
+                    Toggle("", isOn: $settings.commandClickOpensNewTab)
                         .labelsHidden()
                 }
             }
@@ -213,11 +213,11 @@ struct SearchSection: View {
 
             SettingsRow(label: "Search field:") {
                 VStack(alignment: .leading, spacing: 10) {
-                    Toggle("Include search engine suggestions", isOn: .constant(true))
-                    Toggle("Include Safari suggestions", isOn: .constant(true))
-                    Toggle("Enable Quick Website Search", isOn: .constant(true))
-                    Toggle("Preload Top Hit in the background", isOn: .constant(true))
-                    Toggle("Show Favorites", isOn: .constant(true))
+                    Toggle("Include search engine suggestions", isOn: $settings.includeSearchSuggestions)
+                    Toggle("Include Kouke suggestions", isOn: $settings.includeKoukeSuggestions)
+                    Toggle("Enable Quick Website Search", isOn: $settings.enableQuickWebsiteSearch)
+                    Toggle("Preload Top Hit in the background", isOn: $settings.preloadTopHit)
+                    Toggle("Show Favorites", isOn: $settings.showFavoritesInSearch)
                 }
             }
         }
@@ -234,22 +234,23 @@ struct PrivacySection: View {
     var body: some View {
         Form {
             SettingsRow(label: "Website tracking:") {
-                Toggle("Prevent cross-site tracking", isOn: .constant(true))
+                Toggle("Prevent cross-site tracking", isOn: $settings.preventCrossSiteTracking)
             }
 
             SettingsRow(label: "IP address:") {
-                Toggle("Hide IP address from trackers", isOn: .constant(false))
+                Toggle("Hide IP address from trackers", isOn: $settings.hideIPFromTrackers)
             }
 
             Divider().padding(.vertical, 8)
 
             SettingsRow(label: "Cookies and website data:") {
                 VStack(alignment: .leading) {
-                     Toggle("Block all cookies", isOn: .constant(false))
+                    Toggle("Block all cookies", isOn: $settings.blockAllCookies)
 
                     HStack {
                         Button("Manage Website Data...") {
-                            // Action
+                            // Open website data management
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_WebsiteData")!)
                         }
 
                         Button("Clear History...") {
@@ -265,6 +266,7 @@ struct PrivacySection: View {
             Button("Cancel", role: .cancel) {}
             Button("Clear", role: .destructive) {
                 settings.clearBrowsingData()
+                HistoryManager.shared.clearHistory()
             }
         } message: {
             Text("This will clear all browsing history, cookies, and cached data.")
@@ -275,20 +277,34 @@ struct PrivacySection: View {
 // MARK: - Advanced Section
 
 struct AdvancedSection: View {
+    @ObservedObject var settings: BrowserSettings
+
     var body: some View {
         Form {
             SettingsRow(label: "Smart Search Field:") {
-                 Toggle("Show full website address", isOn: .constant(false))
+                Toggle("Show full website address", isOn: $settings.showFullWebsiteAddress)
             }
 
             SettingsRow(label: "Accessibility:") {
-                 Toggle("Never use font sizes smaller than", isOn: .constant(false))
+                HStack {
+                    Toggle("Never use font sizes smaller than", isOn: $settings.useMinimumFontSize)
+
+                    if settings.useMinimumFontSize {
+                        Picker("", selection: $settings.minimumFontSize) {
+                            ForEach([9, 10, 11, 12, 14, 16, 18], id: \.self) { size in
+                                Text("\(size)").tag(size)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 60)
+                    }
+                }
             }
 
             Divider().padding(.vertical, 8)
 
             SettingsRow(label: "", alignment: .leading) {
-                 Toggle("Show Develop menu in menu bar", isOn: .constant(true))
+                Toggle("Show Develop menu in menu bar", isOn: $settings.showDeveloperMenu)
             }
         }
         .padding()

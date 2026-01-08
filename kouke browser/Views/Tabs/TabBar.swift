@@ -79,7 +79,7 @@ struct TabBar: View {
         guard let result = viewModel.detachTab(tabId) else { return }
 
         // Create new window with the detached tab and its WebView
-        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: screenPoint)
+        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: Optional(screenPoint))
     }
 
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {

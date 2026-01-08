@@ -145,43 +145,45 @@ struct kouke_browserApp: App {
                 }
             }
 
-            // Developer menu
-            CommandMenu("Developer") {
-                Button("View Source") {
-                    NotificationCenter.default.post(name: .viewSource, object: nil)
-                }
-                .keyboardShortcut("u", modifiers: .command)
+            // Developer menu (conditionally shown based on settings)
+            if settings.showDeveloperMenu {
+                CommandMenu("Developer") {
+                    Button("View Source") {
+                        NotificationCenter.default.post(name: .viewSource, object: nil)
+                    }
+                    .keyboardShortcut("u", modifiers: .command)
 
-                Button("Developer Tools") {
-                    NotificationCenter.default.post(name: .openDevTools, object: nil)
-                }
-                .keyboardShortcut("i", modifiers: [.command, .option])
+                    Button("Developer Tools") {
+                        NotificationCenter.default.post(name: .openDevTools, object: nil)
+                    }
+                    .keyboardShortcut("i", modifiers: [.command, .option])
 
-                Button("JavaScript Console") {
-                    NotificationCenter.default.post(name: .openConsole, object: nil)
-                }
-                .keyboardShortcut("j", modifiers: [.command, .option])
+                    Button("JavaScript Console") {
+                        NotificationCenter.default.post(name: .openConsole, object: nil)
+                    }
+                    .keyboardShortcut("j", modifiers: [.command, .option])
 
-                Divider()
+                    Divider()
 
-                Toggle("Disable JavaScript", isOn: Binding(
-                    get: { BrowserSettings.shared.disableJavaScript },
-                    set: { _ in NotificationCenter.default.post(name: .toggleJavaScript, object: nil) }
-                ))
+                    Toggle("Disable JavaScript", isOn: Binding(
+                        get: { BrowserSettings.shared.disableJavaScript },
+                        set: { _ in NotificationCenter.default.post(name: .toggleJavaScript, object: nil) }
+                    ))
 
-                Toggle("Disable Images", isOn: Binding(
-                    get: { BrowserSettings.shared.disableImages },
-                    set: { _ in NotificationCenter.default.post(name: .toggleImages, object: nil) }
-                ))
+                    Toggle("Disable Images", isOn: Binding(
+                        get: { BrowserSettings.shared.disableImages },
+                        set: { _ in NotificationCenter.default.post(name: .toggleImages, object: nil) }
+                    ))
 
-                Divider()
+                    Divider()
 
-                Button("Clear Cache") {
-                    NotificationCenter.default.post(name: .clearCache, object: nil)
-                }
+                    Button("Clear Cache") {
+                        NotificationCenter.default.post(name: .clearCache, object: nil)
+                    }
 
-                Button("Clear Cookies") {
-                    NotificationCenter.default.post(name: .clearCookies, object: nil)
+                    Button("Clear Cookies") {
+                        NotificationCenter.default.post(name: .clearCookies, object: nil)
+                    }
                 }
             }
 
