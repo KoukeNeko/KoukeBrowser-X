@@ -257,11 +257,8 @@ struct WebViewContainer: NSViewRepresentable {
             // This ensures we have a valid URL to query
             guard let url = webView.url, url.scheme == "https" else { return }
 
-            // Only fetch if we haven't captured certificate yet
-            if !hasCapturedCertificate {
-                hasCapturedCertificate = true
-                fetchCertificateInfo(for: url)
-            }
+            // Always try to fetch certificate info - the flag will be set on success
+            fetchCertificateInfo(for: url)
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -299,15 +296,14 @@ struct WebViewContainer: NSViewRepresentable {
 
             let challengeHost = challenge.protectionSpace.host
 
-            // Only capture certificate once per navigation, for the main host
-            if !hasCapturedCertificate {
-                let mainHost = pendingNavigationHost ?? webView.url?.host
-                if let mainHost = mainHost, isHostMatch(challengeHost: challengeHost, mainHost: mainHost) {
-                    hasCapturedCertificate = true
-                    let securityInfo = extractSecurityInfo(from: serverTrust, host: challengeHost)
-                    Task { @MainActor in
-                        parent.viewModel.updateTabSecurityInfo(securityInfo, for: parent.tabId)
-                    }
+            // Capture certificate from WKWebView challenge (backup for URLSession method)
+            let mainHost = pendingNavigationHost ?? webView.url?.host
+            if let mainHost = mainHost, isHostMatch(challengeHost: challengeHost, mainHost: mainHost) {
+                // Only update if not already captured, or always update to ensure we have latest
+                let securityInfo = extractSecurityInfo(from: serverTrust, host: challengeHost)
+                hasCapturedCertificate = true
+                Task { @MainActor in
+                    self.parent.viewModel.updateTabSecurityInfo(securityInfo, for: self.parent.tabId)
                 }
             }
 
@@ -315,14 +311,22 @@ struct WebViewContainer: NSViewRepresentable {
         }
 
         private func fetchCertificateInfo(for url: URL) {
+            // Skip if already captured for this navigation
+            guard !hasCapturedCertificate else { return }
+
             let host = url.host ?? ""
 
             // Create a URLSession that captures certificate info
             let sessionConfig = URLSessionConfiguration.ephemeral
-            sessionConfig.timeoutIntervalForRequest = 10
+            sessionConfig.timeoutIntervalForRequest = 5
+            sessionConfig.requestCachePolicy = .reloadIgnoringLocalCacheData
 
             let delegate = CertificateFetchDelegate { [weak self] serverTrust in
                 guard let self = self else { return }
+
+                // Mark as captured to prevent duplicate fetches
+                self.hasCapturedCertificate = true
+
                 let securityInfo = self.extractSecurityInfo(from: serverTrust, host: host)
                 Task { @MainActor in
                     self.parent.viewModel.updateTabSecurityInfo(securityInfo, for: self.parent.tabId)
@@ -331,12 +335,15 @@ struct WebViewContainer: NSViewRepresentable {
 
             let session = URLSession(configuration: sessionConfig, delegate: delegate, delegateQueue: nil)
 
-            // Make a HEAD request to get certificate without downloading content
+            // Make a simple GET request (some servers don't respond to HEAD properly)
             var request = URLRequest(url: url)
-            request.httpMethod = "HEAD"
+            request.httpMethod = "GET"
+            // Only request headers to minimize data transfer
+            request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
 
             let task = session.dataTask(with: request) { _, _, _ in
-                // We don't need the response - certificate is captured in delegate
+                // Certificate is captured in delegate callback
+                session.invalidateAndCancel()
             }
             task.resume()
         }
