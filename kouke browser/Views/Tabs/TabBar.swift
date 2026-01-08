@@ -5,74 +5,116 @@ import UniformTypeIdentifiers
 struct TabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @State private var draggedTabId: UUID?
+    @State private var availableWidth: CGFloat = 800
+
+    // Constants for tab sizing
+    private let maxTabWidth: CGFloat = 200
+    private let minTabWidth: CGFloat = 100
+    private let trafficLightsWidth: CGFloat = 80
+    private let addButtonWidth: CGFloat = 40
 
     var body: some View {
         HStack(spacing: 0) {
             #if os(macOS)
             // Space for native traffic lights
             Color.clear
-                .frame(width: 80, height: 40)
+                .frame(width: trafficLightsWidth, height: 40)
             #endif
 
-            // Tab strip
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ForEach(viewModel.tabs) { tab in
-                        DraggableTabView(
-                            tab: tab,
-                            isActive: tab.id == viewModel.activeTabId,
-                            onSelect: { viewModel.switchToTab(tab.id) },
-                            onClose: { viewModel.closeTab(tab.id) },
-                            canClose: true,
-                            onReorder: { draggedId, destinationId, insertAfter in
-                                withAnimation(.default) {
-                                    if insertAfter {
-                                        viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
-                                    } else {
-                                        viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+            // Tab strip with horizontal scrolling
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        ForEach(viewModel.tabs) { tab in
+                            DraggableTabView(
+                                tab: tab,
+                                isActive: tab.id == viewModel.activeTabId,
+                                onSelect: { viewModel.switchToTab(tab.id) },
+                                onClose: { viewModel.closeTab(tab.id) },
+                                canClose: true,
+                                onReorder: { draggedId, destinationId, insertAfter in
+                                    withAnimation(.default) {
+                                        if insertAfter {
+                                            viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
+                                        } else {
+                                            viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+                                        }
                                     }
+                                },
+                                onReceiveTab: { transferData, destinationId, insertAfter in
+                                    receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
+                                },
+                                onDetach: { tabId, screenPoint in
+                                    detachTabToNewWindow(tabId: tabId, at: screenPoint)
+                                },
+                                onDragStarted: { id in
+                                    draggedTabId = id
+                                },
+                                onDragEnded: {
+                                    draggedTabId = nil
                                 }
-                            },
-                            onReceiveTab: { transferData, destinationId, insertAfter in
-                                receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
-                            },
-                            onDetach: { tabId, screenPoint in
-                                detachTabToNewWindow(tabId: tabId, at: screenPoint)
-                            },
-                            onDragStarted: { id in
-                                draggedTabId = id
-                            },
-                            onDragEnded: {
-                                draggedTabId = nil
-                            }
-                        )
-                        .frame(minWidth: 120, maxWidth: 220, maxHeight: .infinity)
-                        .opacity(draggedTabId == tab.id ? 0.5 : 1.0)
-                    }
+                            )
+                            .frame(width: calculateTabWidth(), height: 40)
+                            .opacity(draggedTabId == tab.id ? 0.5 : 1.0)
+                            .id(tab.id)
+                        }
 
-                    // Add tab button
-                    Button(action: { viewModel.addTab() }) {
-                        Text("+")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(Color("TextMuted"))
-                            .frame(width: 32, height: 28)
+                        // Add tab button
+                        Button(action: { viewModel.addTab() }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("TextMuted"))
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .onHover { hovering in
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
+                }
+                .onChange(of: viewModel.activeTabId) { _, newId in
+                    // Scroll to active tab when it changes
+                    if let newId = newId {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo(newId, anchor: .center)
                         }
                     }
                 }
             }
-            .layoutPriority(1)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear.onAppear {
+                        availableWidth = geometry.size.width
+                    }
+                    .onChange(of: geometry.size.width) { _, newWidth in
+                        availableWidth = newWidth
+                    }
+                }
+            )
         }
         .frame(height: 40)
         .background(Color("TitleBarBg"))
+    }
+
+    /// Calculate the width for each tab based on available space
+    private func calculateTabWidth() -> CGFloat {
+        let tabCount = CGFloat(viewModel.tabs.count)
+        guard tabCount > 0 else { return maxTabWidth }
+
+        // Available width for tabs (excluding add button)
+        let tabAreaWidth = availableWidth - addButtonWidth
+
+        // Calculate ideal width per tab
+        let idealWidth = tabAreaWidth / tabCount
+
+        // Clamp between min and max
+        return min(max(idealWidth, minTabWidth), maxTabWidth)
     }
 
     private func detachTabToNewWindow(tabId: UUID, at screenPoint: NSPoint) {
