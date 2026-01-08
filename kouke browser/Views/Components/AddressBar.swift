@@ -154,14 +154,14 @@ struct AddressBar: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showBookmarks)) { _ in
-            // Only handle here if button is visible (popover mode)
-            if settings.showBookmarksButton {
+            // Only handle here if button is visible AND not using sheet mode
+            if settings.showBookmarksButton && !settings.alwaysUseSheetForMenuShortcuts {
                 showingBookmarks = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
-            // Only handle here if button is visible (popover mode)
-            if settings.showDownloadsButton {
+            // Only handle here if button is visible AND not using sheet mode
+            if settings.showDownloadsButton && !settings.alwaysUseSheetForMenuShortcuts {
                 showingDownloads = true
             }
         }

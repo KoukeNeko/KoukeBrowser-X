@@ -188,7 +188,13 @@ struct AppearanceSection: View {
                         .labelsHidden()
                 }
 
-                Text("When enabled, buttons appear in the address bar and show a popover when clicked. When disabled, use menu or keyboard shortcuts to open in a separate window.")
+                Divider().padding(.vertical, 4)
+
+                SettingsRow(label: "") {
+                    Toggle("Always open in separate window from menu/shortcuts", isOn: $settings.alwaysUseSheetForMenuShortcuts)
+                }
+
+                Text("When toolbar buttons are visible, clicking them shows a popover. Enable this option to always open a separate window when using menu items or keyboard shortcuts instead.")
                     .font(.system(size: 11))
                     .foregroundColor(Color("TextMuted"))
                     .padding(.top, 4)

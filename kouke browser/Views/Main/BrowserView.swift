@@ -299,9 +299,10 @@ struct BookmarksMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .showBookmarks)) { _ in
-                // Only show sheet if toolbar button is hidden
-                // When button is visible, AddressBar handles the popover
-                if !settings.showBookmarksButton {
+                // Show sheet if:
+                // 1. Toolbar button is hidden, OR
+                // 2. "Always use sheet for menu/shortcuts" is enabled
+                if !settings.showBookmarksButton || settings.alwaysUseSheetForMenuShortcuts {
                     showBookmarks = true
                 }
             }
@@ -318,9 +319,10 @@ struct DownloadsMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
-                // Only show sheet if toolbar button is hidden
-                // When button is visible, AddressBar handles the popover
-                if !settings.showDownloadsButton {
+                // Show sheet if:
+                // 1. Toolbar button is hidden, OR
+                // 2. "Always use sheet for menu/shortcuts" is enabled
+                if !settings.showDownloadsButton || settings.alwaysUseSheetForMenuShortcuts {
                     showDownloads = true
                 }
             }

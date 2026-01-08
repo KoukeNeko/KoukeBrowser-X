@@ -446,8 +446,8 @@ private struct WindowBookmarksMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .showBookmarks)) { _ in
-                // Only show sheet if toolbar button is hidden
-                if !settings.showBookmarksButton {
+                // Show sheet if button is hidden OR alwaysUseSheet is enabled
+                if !settings.showBookmarksButton || settings.alwaysUseSheetForMenuShortcuts {
                     showBookmarks = true
                 }
             }
@@ -464,8 +464,8 @@ private struct WindowDownloadsMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
-                // Only show sheet if toolbar button is hidden
-                if !settings.showDownloadsButton {
+                // Show sheet if button is hidden OR alwaysUseSheet is enabled
+                if !settings.showDownloadsButton || settings.alwaysUseSheetForMenuShortcuts {
                     showDownloads = true
                 }
             }
