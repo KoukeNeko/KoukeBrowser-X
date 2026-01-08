@@ -20,13 +20,13 @@ struct HistoryItem: Identifiable, Codable, Equatable {
         self.visitedAt = visitedAt
     }
 
-    /// Get favicon URL from Google's favicon service
+    /// Get favicon URL with apple-touch-icon priority
     var faviconURL: URL? {
         guard let urlObj = URL(string: url),
               let host = urlObj.host else {
             return nil
         }
-        return URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=32")
+        return FaviconService.shared.faviconURL(for: url)
     }
 
     /// Get the domain from the URL for display
