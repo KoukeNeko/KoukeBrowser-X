@@ -24,9 +24,8 @@ class WindowManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.saveAllSessions()
-            }
+            // Execute synchronously - notification is already on main queue
+            self?.saveAllSessions()
         }
     }
 
