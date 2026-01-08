@@ -218,6 +218,7 @@ struct BrowserViewForWindow: View {
     @State private var showTabOverview = false
     @State private var showHistory = false
     @State private var showBookmarks = false
+    @State private var showDownloads = false
     @State private var showBookmarkAllTabsAlert = false
     @State private var currentZoomLevel: Double = 1.0
 
@@ -228,6 +229,9 @@ struct BrowserViewForWindow: View {
             }
             .sheet(isPresented: $showBookmarks) {
                 bookmarksSheet
+            }
+            .sheet(isPresented: $showDownloads) {
+                DownloadsView(onDismiss: { showDownloads = false })
             }
             .background(Color("Bg"))
             .ignoresSafeArea()
@@ -240,6 +244,7 @@ struct BrowserViewForWindow: View {
             .modifier(WindowViewMenuModifier(viewModel: viewModel, showTabOverview: $showTabOverview, currentZoomLevel: $currentZoomLevel))
             .modifier(WindowHistoryMenuModifier(viewModel: viewModel, showHistory: $showHistory))
             .modifier(WindowBookmarksMenuModifier(showBookmarks: $showBookmarks, showBookmarkAllTabsAlert: $showBookmarkAllTabsAlert))
+            .modifier(WindowDownloadsMenuModifier(showDownloads: $showDownloads))
             .modifier(WindowDeveloperMenuModifier(viewModel: viewModel, settings: settings))
             .modifier(WindowKoukeURLModifier(viewModel: viewModel))
             .modifier(WindowSettingsModifier(viewModel: viewModel))
@@ -444,6 +449,17 @@ private struct WindowBookmarksMenuModifier: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .bookmarkAllTabs)) { _ in
                 showBookmarkAllTabsAlert = true
+            }
+    }
+}
+
+private struct WindowDownloadsMenuModifier: ViewModifier {
+    @Binding var showDownloads: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
+                showDownloads = true
             }
     }
 }

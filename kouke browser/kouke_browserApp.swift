@@ -95,6 +95,13 @@ struct kouke_browserApp: App {
                     NotificationCenter.default.post(name: .showAllTabs, object: nil)
                 }
                 .keyboardShortcut("\\", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Show Downloads") {
+                    NotificationCenter.default.post(name: .showDownloads, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: [.command, .option])
             }
 
             // History menu

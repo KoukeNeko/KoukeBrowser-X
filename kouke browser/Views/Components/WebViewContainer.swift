@@ -112,7 +112,7 @@ struct WebViewContainer: NSViewRepresentable {
         Coordinator(self)
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
         var parent: WebViewContainer
         private var titleObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
@@ -497,6 +497,122 @@ struct WebViewContainer: NSViewRepresentable {
                 }
             }
             return nil
+        }
+
+        // MARK: - WKDownloadDelegate
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            // Check if this response should be downloaded instead of displayed
+            if let mimeType = navigationResponse.response.mimeType {
+                let downloadMimeTypes = [
+                    "application/octet-stream",
+                    "application/zip",
+                    "application/x-zip-compressed",
+                    "application/x-rar-compressed",
+                    "application/x-7z-compressed",
+                    "application/x-tar",
+                    "application/gzip",
+                    "application/x-bzip2",
+                    "application/pdf",
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument",
+                    "application/vnd.ms-excel",
+                    "application/vnd.ms-powerpoint",
+                    "application/x-apple-diskimage",
+                    "application/x-dmg"
+                ]
+
+                let isDownloadType = downloadMimeTypes.contains { mimeType.hasPrefix($0) }
+
+                // Also check Content-Disposition header for attachment
+                let isAttachment = (navigationResponse.response as? HTTPURLResponse)?
+                    .value(forHTTPHeaderField: "Content-Disposition")?
+                    .contains("attachment") ?? false
+
+                if !navigationResponse.canShowMIMEType || isDownloadType || isAttachment {
+                    if #available(macOS 11.3, *) {
+                        decisionHandler(.download)
+                        return
+                    }
+                }
+            }
+
+            decisionHandler(.allow)
+        }
+
+        @available(macOS 11.3, *)
+        func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+            download.delegate = self
+        }
+
+        @available(macOS 11.3, *)
+        func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+            download.delegate = self
+        }
+
+        @available(macOS 11.3, *)
+        func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+            let settings = BrowserSettings.shared
+
+            // Determine download location
+            let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+
+            if settings.downloadLocation == .askEachTime {
+                // Show save panel
+                let savePanel = NSSavePanel()
+                savePanel.directoryURL = downloadsURL
+                savePanel.nameFieldStringValue = suggestedFilename
+                savePanel.canCreateDirectories = true
+
+                savePanel.begin { response in
+                    if response == .OK, let url = savePanel.url {
+                        completionHandler(url)
+                    } else {
+                        completionHandler(nil)
+                    }
+                }
+            } else {
+                // Save to Downloads folder with unique filename
+                var destinationURL = downloadsURL.appendingPathComponent(suggestedFilename)
+
+                // Handle duplicate filenames
+                var counter = 1
+                let originalName = (suggestedFilename as NSString).deletingPathExtension
+                let ext = (suggestedFilename as NSString).pathExtension
+
+                while FileManager.default.fileExists(atPath: destinationURL.path) {
+                    let newName = ext.isEmpty ? "\(originalName) (\(counter))" : "\(originalName) (\(counter)).\(ext)"
+                    destinationURL = downloadsURL.appendingPathComponent(newName)
+                    counter += 1
+                }
+
+                completionHandler(destinationURL)
+            }
+
+            // Start tracking in DownloadManager
+            if let url = download.originalRequest?.url {
+                Task { @MainActor in
+                    _ = DownloadManager.shared.startDownload(url: url, suggestedFilename: suggestedFilename)
+                }
+            }
+        }
+
+        @available(macOS 11.3, *)
+        func downloadDidFinish(_ download: WKDownload) {
+            // Download completed - DownloadManager handles the completion
+        }
+
+        @available(macOS 11.3, *)
+        func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+            // Download failed - DownloadManager handles the error
+            if let url = download.originalRequest?.url {
+                Task { @MainActor in
+                    // Find the download item and update its status
+                    if let item = DownloadManager.shared.downloadItems.first(where: { $0.url == url.absoluteString }) {
+                        DownloadManager.shared.failDownload(for: item.id, error: error)
+                    }
+                }
+            }
         }
     }
 }

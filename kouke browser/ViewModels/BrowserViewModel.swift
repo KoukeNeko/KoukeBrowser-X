@@ -698,4 +698,6 @@ extension Notification.Name {
     static let clearCache = Notification.Name("clearCache")
     static let clearCookies = Notification.Name("clearCookies")
 
+    // Downloads
+    static let showDownloads = Notification.Name("showDownloads")
 }
