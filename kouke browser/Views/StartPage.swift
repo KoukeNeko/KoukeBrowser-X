@@ -84,14 +84,27 @@ struct BookmarkButton: View {
                         .fill(Color("CardBg"))
                         .border(Color("Border"), width: 1)
 
-                    AsyncImage(url: bookmark.faviconURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fit)
-                    } placeholder: {
-                        Image(systemName: "globe")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color("TextMuted"))
+                    AsyncImage(url: bookmark.faviconURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 64, height: 64)
+                                .clipped()
+                        case .failure:
+                            Image(systemName: "globe")
+                                .font(.system(size: 24))
+                                .foregroundColor(Color("TextMuted"))
+                        case .empty:
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        @unknown default:
+                            Image(systemName: "globe")
+                                .font(.system(size: 24))
+                                .foregroundColor(Color("TextMuted"))
+                        }
                     }
-                    .frame(width: 24, height: 24)
                 }
                 .frame(width: 64, height: 64)
                 .scaleEffect(isHovering ? 1.02 : 1.0)
