@@ -515,17 +515,42 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         updateUI()
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        // Re-apply colors when appearance changes
+        // Use async to ensure the appearance is fully propagated
+        DispatchQueue.main.async { [weak self] in
+            self?.updateUI()
+        }
+    }
+
     private func updateUI() {
         guard let tab = currentTab else { return }
 
-        // Background color
-        layer?.backgroundColor = isActive
-            ? NSColor(named: "TabActive")?.cgColor
-            : NSColor(named: "TabInactive")?.cgColor
+        // Force the appearance context for color resolution
+        // This ensures NSColor resolves to the correct variant (light/dark)
+        let appearance = window?.appearance ?? effectiveAppearance
+        NSAppearance.current = appearance
+
+        // Disable implicit animations for immediate color updates
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
+        // Background color - resolve with correct appearance
+        let bgColor: NSColor
+        if isActive {
+            bgColor = NSColor(named: "TabActive") ?? .windowBackgroundColor
+        } else {
+            bgColor = NSColor(named: "TabInactive") ?? .controlBackgroundColor
+        }
+        layer?.backgroundColor = bgColor.cgColor
 
         // Title
         titleLabel?.stringValue = tab.title
-        titleLabel?.textColor = isActive ? NSColor(named: "Text") : NSColor(named: "TextMuted")
+        let textColor = isActive
+            ? (NSColor(named: "Text") ?? .labelColor)
+            : (NSColor(named: "TextMuted") ?? .secondaryLabelColor)
+        titleLabel?.textColor = textColor
 
         // Loading state
         if tab.isLoading {
@@ -548,6 +573,19 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
         // Close button
         closeButton?.isHidden = !canClose
         updateCloseButtonAppearance()
+
+        // Update separator and indicator colors for theme changes
+        let borderColor = (NSColor(named: "Border") ?? .separatorColor).cgColor
+        for subview in subviews {
+            if subview != leftDropIndicator && subview != rightDropIndicator &&
+               subview != faviconView && subview != titleLabel &&
+               subview != closeButton && subview != loadingIndicator {
+                // This is the separator
+                subview.layer?.backgroundColor = borderColor
+            }
+        }
+
+        CATransaction.commit()
     }
 
     private func loadFavicon(from url: URL) {
@@ -673,6 +711,10 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
     }
 
     private func createDragImage() -> NSImage {
+        // Set appearance context for correct color resolution
+        let appearance = window?.appearance ?? effectiveAppearance
+        NSAppearance.current = appearance
+
         let size = NSSize(width: bounds.width, height: bounds.height)
         let image = NSImage(size: size)
 
