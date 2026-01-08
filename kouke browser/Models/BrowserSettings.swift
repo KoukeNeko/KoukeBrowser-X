@@ -180,6 +180,30 @@ enum RemoveHistoryItems: String, CaseIterable {
     }
 }
 
+enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
+    case addToFavorites = "add_to_favorites"
+    case downloads = "downloads"
+    case bookmarks = "bookmarks"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .addToFavorites: return "Add to Favorites"
+        case .downloads: return "Downloads"
+        case .bookmarks: return "Bookmarks"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .addToFavorites: return "star"
+        case .downloads: return "arrow.down.circle"
+        case .bookmarks: return "book"
+        }
+    }
+}
+
 class BrowserSettings: ObservableObject {
     static let shared = BrowserSettings()
 
@@ -332,6 +356,13 @@ class BrowserSettings: ObservableObject {
 
     @Published var alwaysUseSheetForMenuShortcuts: Bool {
         didSet { defaults.set(alwaysUseSheetForMenuShortcuts, forKey: "alwaysUseSheetForMenuShortcuts") }
+    }
+
+    @Published var toolbarButtonOrder: [ToolbarButton] {
+        didSet {
+            let rawValues = toolbarButtonOrder.map { $0.rawValue }
+            defaults.set(rawValues, forKey: "toolbarButtonOrder")
+        }
     }
 
     // Advanced settings
@@ -520,6 +551,19 @@ class BrowserSettings: ObservableObject {
         minimumFontSize = savedMinFontSize > 0 ? savedMinFontSize : 9
 
         useMinimumFontSize = defaults.bool(forKey: "useMinimumFontSize")
+
+        // Toolbar button order (must be after all other properties are initialized)
+        if let savedOrder = defaults.stringArray(forKey: "toolbarButtonOrder") {
+            toolbarButtonOrder = savedOrder.compactMap { ToolbarButton(rawValue: $0) }
+            // Ensure all buttons are present
+            for button in ToolbarButton.allCases {
+                if !toolbarButtonOrder.contains(button) {
+                    toolbarButtonOrder.append(button)
+                }
+            }
+        } else {
+            toolbarButtonOrder = [.addToFavorites, .downloads, .bookmarks]
+        }
 
         // Apply saved theme on startup
         applyTheme()

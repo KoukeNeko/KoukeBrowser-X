@@ -27,6 +27,17 @@ struct DownloadItem: Identifiable, Codable, Equatable {
     var completedAt: Date?
     var errorMessage: String?
 
+    // Speed tracking (not persisted)
+    var bytesPerSecond: Double = 0
+    var lastUpdateTime: Date?
+    var lastDownloadedSize: Int64 = 0
+
+    // Custom coding keys to exclude speed tracking from persistence
+    enum CodingKeys: String, CodingKey {
+        case id, filename, url, localPath, fileSize, downloadedSize
+        case status, startedAt, completedAt, errorMessage
+    }
+
     init(
         id: UUID = UUID(),
         filename: String,
@@ -83,5 +94,40 @@ struct DownloadItem: Identifiable, Codable, Equatable {
     var fileExists: Bool {
         guard let path = localPath else { return false }
         return FileManager.default.fileExists(atPath: path)
+    }
+
+    /// Human-readable download speed
+    var formattedSpeed: String? {
+        guard bytesPerSecond > 0 else { return nil }
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        return "\(formatter.string(fromByteCount: Int64(bytesPerSecond)))/s"
+    }
+
+    /// Estimated time remaining
+    var estimatedTimeRemaining: TimeInterval? {
+        guard bytesPerSecond > 0,
+              let total = fileSize,
+              total > downloadedSize else { return nil }
+        let remaining = Double(total - downloadedSize)
+        return remaining / bytesPerSecond
+    }
+
+    /// Human-readable time remaining
+    var formattedTimeRemaining: String? {
+        guard let seconds = estimatedTimeRemaining else { return nil }
+
+        if seconds < 60 {
+            return "\(Int(seconds))s remaining"
+        } else if seconds < 3600 {
+            let minutes = Int(seconds / 60)
+            let secs = Int(seconds.truncatingRemainder(dividingBy: 60))
+            return "\(minutes)m \(secs)s remaining"
+        } else {
+            let hours = Int(seconds / 3600)
+            let minutes = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "\(hours)h \(minutes)m remaining"
+        }
     }
 }
