@@ -585,6 +585,11 @@ class BrowserViewModel: ObservableObject {
         tabs[index].canGoForward = canGoForward
     }
 
+    func updateTabSecurityInfo(_ securityInfo: SecurityInfo, for tabId: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[index].securityInfo = securityInfo
+    }
+
     #if os(macOS)
     func updateTabThumbnail(_ thumbnail: NSImage, for tabId: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }

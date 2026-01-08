@@ -7,6 +7,7 @@
 
 import SwiftUI
 import WebKit
+import CommonCrypto
 
 struct WebViewContainer: NSViewRepresentable {
     let tabId: UUID
@@ -123,6 +124,8 @@ struct WebViewContainer: NSViewRepresentable {
         private var fontSizeObserver: NSObjectProtocol?
         private let webAuthnManager = WebAuthnManager()
         weak var webView: WKWebView?
+        private var pendingNavigationHost: String?
+        private var hasCapturedCertificate = false
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
@@ -218,10 +221,41 @@ struct WebViewContainer: NSViewRepresentable {
 
         // MARK: - WKNavigationDelegate
 
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            // Only capture the target host for main frame navigations (not iframes)
+            if navigationAction.targetFrame?.isMainFrame == true,
+               let host = navigationAction.request.url?.host {
+                pendingNavigationHost = host
+                hasCapturedCertificate = false
+            }
+            decisionHandler(.allow)
+        }
+
+        func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+            // Update pending host on server redirect (main frame only)
+            if let newHost = webView.url?.host {
+                pendingNavigationHost = newHost
+                // Don't reset hasCapturedCertificate here - we want to capture after redirect settles
+            }
+        }
+
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(true, for: parent.tabId)
+
+                // Set initial security info based on URL scheme
+                if let url = webView.url?.absoluteString ?? pendingNavigationURL() {
+                    let basicSecurityInfo = SecurityInfo.fromURL(url)
+                    parent.viewModel.updateTabSecurityInfo(basicSecurityInfo, for: parent.tabId)
+                }
             }
+        }
+
+        private func pendingNavigationURL() -> String? {
+            if let host = pendingNavigationHost {
+                return "https://\(host)"
+            }
+            return nil
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -248,6 +282,178 @@ struct WebViewContainer: NSViewRepresentable {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
             }
+        }
+
+        func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+            guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+                  let serverTrust = challenge.protectionSpace.serverTrust else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+
+            let challengeHost = challenge.protectionSpace.host
+
+            // Only capture certificate once per navigation, for the main host
+            if !hasCapturedCertificate {
+                let mainHost = pendingNavigationHost ?? webView.url?.host
+                if let mainHost = mainHost, isHostMatch(challengeHost: challengeHost, mainHost: mainHost) {
+                    hasCapturedCertificate = true
+                    let securityInfo = extractSecurityInfo(from: serverTrust, host: challengeHost)
+                    Task { @MainActor in
+                        parent.viewModel.updateTabSecurityInfo(securityInfo, for: parent.tabId)
+                    }
+                }
+            }
+
+            completionHandler(.performDefaultHandling, nil)
+        }
+
+        private func isHostMatch(challengeHost: String, mainHost: String) -> Bool {
+            // Exact match
+            if challengeHost == mainHost { return true }
+            // Challenge is subdomain of main (e.g., www.example.com matches example.com)
+            if challengeHost.hasSuffix(".\(mainHost)") { return true }
+            // Main is subdomain of challenge (e.g., example.com matches www.example.com)
+            if mainHost.hasSuffix(".\(challengeHost)") { return true }
+            // Handle www prefix differences
+            let challengeWithoutWww = challengeHost.hasPrefix("www.") ? String(challengeHost.dropFirst(4)) : challengeHost
+            let mainWithoutWww = mainHost.hasPrefix("www.") ? String(mainHost.dropFirst(4)) : mainHost
+            return challengeWithoutWww == mainWithoutWww
+        }
+
+        private func extractSecurityInfo(from serverTrust: SecTrust, host: String) -> SecurityInfo {
+            var certificateInfo: CertificateInfo?
+
+            if let certificates = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate],
+               let leafCert = certificates.first {
+                // Get issuer from the second certificate in chain (the CA that signed the leaf)
+                let issuerCert = certificates.count > 1 ? certificates[1] : nil
+                certificateInfo = extractCertificateInfo(from: leafCert, issuerCert: issuerCert)
+            }
+
+            return SecurityInfo(
+                level: .secure,
+                certificate: certificateInfo,
+                protocol_: nil,
+                host: host
+            )
+        }
+
+        private func extractCertificateInfo(from certificate: SecCertificate, issuerCert: SecCertificate?) -> CertificateInfo {
+            var subject = "Unknown"
+            var issuer = "Unknown"
+            var validFrom: Date?
+            var validUntil: Date?
+            var serialNumber: String?
+            var version: Int?
+            var signatureAlgorithm: String?
+            var publicKeyAlgorithm: String?
+            var publicKeySize: Int?
+            var sha256Fingerprint: String?
+
+            // Get certificate subject (who the cert is issued to)
+            if let summary = SecCertificateCopySubjectSummary(certificate) as String? {
+                subject = summary
+            }
+
+            // Get issuer from the issuer certificate's subject (more reliable)
+            if let issuerCert = issuerCert,
+               let issuerSummary = SecCertificateCopySubjectSummary(issuerCert) as String? {
+                issuer = issuerSummary
+            }
+
+            // Get SHA-256 fingerprint
+            let certData = SecCertificateCopyData(certificate) as Data
+            sha256Fingerprint = sha256Hash(of: certData)
+
+            // Get public key info
+            if let publicKey = SecCertificateCopyKey(certificate) {
+                let keyAttributes = SecKeyCopyAttributes(publicKey) as? [String: Any]
+                if let keyType = keyAttributes?[kSecAttrKeyType as String] as? String {
+                    if keyType == kSecAttrKeyTypeRSA as String {
+                        publicKeyAlgorithm = "RSA"
+                    } else if keyType == kSecAttrKeyTypeEC as String || keyType == kSecAttrKeyTypeECSECPrimeRandom as String {
+                        publicKeyAlgorithm = "ECDSA"
+                    } else {
+                        publicKeyAlgorithm = keyType
+                    }
+                }
+                if let keySizeNumber = keyAttributes?[kSecAttrKeySizeInBits as String] as? Int {
+                    publicKeySize = keySizeNumber
+                }
+            }
+
+            // Get detailed certificate values
+            if let certValues = SecCertificateCopyValues(certificate, nil, nil) as? [String: Any] {
+                // Extract validity period
+                if let notBeforeData = certValues[kSecOIDX509V1ValidityNotBefore as String] as? [String: Any],
+                   let notBeforeValue = notBeforeData[kSecPropertyKeyValue as String] as? Double {
+                    validFrom = Date(timeIntervalSinceReferenceDate: notBeforeValue)
+                }
+
+                if let notAfterData = certValues[kSecOIDX509V1ValidityNotAfter as String] as? [String: Any],
+                   let notAfterValue = notAfterData[kSecPropertyKeyValue as String] as? Double {
+                    validUntil = Date(timeIntervalSinceReferenceDate: notAfterValue)
+                }
+
+                // Extract serial number
+                if let serialData = certValues[kSecOIDX509V1SerialNumber as String] as? [String: Any],
+                   let serialValue = serialData[kSecPropertyKeyValue as String] as? String {
+                    serialNumber = serialValue
+                }
+
+                // Extract version
+                if let versionData = certValues[kSecOIDX509V1Version as String] as? [String: Any],
+                   let versionValue = versionData[kSecPropertyKeyValue as String] as? Int {
+                    version = versionValue + 1  // Version is 0-indexed in the cert
+                }
+
+                // Extract signature algorithm
+                if let sigAlgData = certValues[kSecOIDX509V1SignatureAlgorithm as String] as? [String: Any],
+                   let sigAlgValue = sigAlgData[kSecPropertyKeyValue as String] as? [[String: Any]] {
+                    for item in sigAlgValue {
+                        if let value = item[kSecPropertyKeyValue as String] as? String {
+                            signatureAlgorithm = formatSignatureAlgorithm(value)
+                            break
+                        }
+                    }
+                }
+            }
+
+            return CertificateInfo(
+                subject: subject,
+                issuer: issuer,
+                validFrom: validFrom,
+                validUntil: validUntil,
+                serialNumber: serialNumber,
+                version: version,
+                signatureAlgorithm: signatureAlgorithm,
+                publicKeyAlgorithm: publicKeyAlgorithm,
+                publicKeySize: publicKeySize,
+                sha256Fingerprint: sha256Fingerprint
+            )
+        }
+
+        private func sha256Hash(of data: Data) -> String {
+            var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+            data.withUnsafeBytes {
+                _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash)
+            }
+            return hash.map { String(format: "%02X", $0) }.joined(separator: ":")
+        }
+
+        private func formatSignatureAlgorithm(_ oid: String) -> String {
+            // Common OIDs for signature algorithms
+            let algorithms: [String: String] = [
+                "1.2.840.113549.1.1.11": "SHA-256 with RSA",
+                "1.2.840.113549.1.1.12": "SHA-384 with RSA",
+                "1.2.840.113549.1.1.13": "SHA-512 with RSA",
+                "1.2.840.113549.1.1.5": "SHA-1 with RSA",
+                "1.2.840.10045.4.3.2": "ECDSA with SHA-256",
+                "1.2.840.10045.4.3.3": "ECDSA with SHA-384",
+                "1.2.840.10045.4.3.4": "ECDSA with SHA-512"
+            ]
+            return algorithms[oid] ?? oid
         }
 
         // MARK: - WKUIDelegate

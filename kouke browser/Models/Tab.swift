@@ -36,19 +36,21 @@ struct Tab: Identifiable, Equatable {
     var isLoading: Bool
     var canGoBack: Bool
     var canGoForward: Bool
+    var securityInfo: SecurityInfo?
     #if os(macOS)
     var thumbnail: NSImage?
     #else
     var thumbnail: UIImage?
     #endif
 
-    init(id: UUID = UUID(), title: String = "New Tab", url: String = "kouke:blank", isLoading: Bool = false, canGoBack: Bool = false, canGoForward: Bool = false) {
+    init(id: UUID = UUID(), title: String = "New Tab", url: String = "kouke:blank", isLoading: Bool = false, canGoBack: Bool = false, canGoForward: Bool = false, securityInfo: SecurityInfo? = nil) {
         self.id = id
         self.title = title
         self.url = url
         self.isLoading = isLoading
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
+        self.securityInfo = securityInfo
         self.thumbnail = nil
     }
 
@@ -58,7 +60,8 @@ struct Tab: Identifiable, Equatable {
         lhs.url == rhs.url &&
         lhs.isLoading == rhs.isLoading &&
         lhs.canGoBack == rhs.canGoBack &&
-        lhs.canGoForward == rhs.canGoForward
+        lhs.canGoForward == rhs.canGoForward &&
+        lhs.securityInfo == rhs.securityInfo
         // Intentionally not comparing thumbnail for performance
     }
     

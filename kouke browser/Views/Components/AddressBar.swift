@@ -13,10 +13,30 @@ struct AddressBar: View {
     @FocusState private var isAddressFocused: Bool
     @State private var showingAddBookmark = false
     @State private var showingBookmarks = false
+    @State private var showingSecurityInfo = false
 
     private var isCurrentPageBookmarked: Bool {
         guard let tab = viewModel.activeTab else { return false }
         return bookmarkManager.isBookmarked(url: tab.url)
+    }
+
+    private var currentSecurityInfo: SecurityInfo {
+        viewModel.activeTab?.securityInfo ?? SecurityInfo.fromURL(viewModel.activeTab?.url ?? "")
+    }
+
+    private var securityIcon: String {
+        currentSecurityInfo.level.icon
+    }
+
+    private var securityIconColor: Color {
+        switch currentSecurityInfo.level {
+        case .insecure:
+            return .red
+        case .mixed:
+            return .orange
+        case .local, .secure, .unknown:
+            return Color("TextMuted").opacity(0.7)
+        }
     }
 
     var body: some View {
@@ -38,10 +58,19 @@ struct AddressBar: View {
 
             // Address input container (no border, like Rust version)
             HStack(spacing: 8) {
-                // Lock icon
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color("TextMuted").opacity(0.7))
+                // Security lock icon (clickable)
+                Button(action: { showingSecurityInfo = true }) {
+                    Image(systemName: securityIcon)
+                        .font(.system(size: 11))
+                        .foregroundColor(securityIconColor)
+                }
+                .buttonStyle(.plain)
+                .help("View Security Info")
+                .popover(isPresented: $showingSecurityInfo, arrowEdge: .bottom) {
+                    if let tab = viewModel.activeTab {
+                        SecurityDetailPopover(securityInfo: tab.securityInfo, url: tab.url)
+                    }
+                }
 
                 // URL text field
                 TextField("Search or enter website", text: $viewModel.inputURL)
