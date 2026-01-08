@@ -10,9 +10,11 @@ import SwiftUI
 struct AddressBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @ObservedObject var bookmarkManager = BookmarkManager.shared
+    @ObservedObject var settings = BrowserSettings.shared
     @FocusState private var isAddressFocused: Bool
     @State private var showingAddBookmark = false
     @State private var showingBookmarks = false
+    @State private var showingDownloads = false
     @State private var showingSecurityInfo = false
 
     private var isCurrentPageBookmarked: Bool {
@@ -83,39 +85,59 @@ struct AddressBar: View {
                     }
             }
 
-            // Bookmark button
-            Button(action: toggleBookmark) {
-                Image(systemName: isCurrentPageBookmarked ? "star.fill" : "star")
-                    .font(.system(size: 14))
-                    .foregroundColor(isCurrentPageBookmarked ? .yellow : Color("TextMuted"))
+            // Downloads button (conditional)
+            if settings.showDownloadsButton {
+                Button(action: { showingDownloads = true }) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help("Show Downloads")
+                .popover(isPresented: $showingDownloads, arrowEdge: .bottom) {
+                    DownloadsView(onDismiss: { showingDownloads = false })
+                }
             }
-            .buttonStyle(.plain)
-            .padding(6)
-            .contentShape(Rectangle())
-            .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
-            .popover(isPresented: $showingAddBookmark, arrowEdge: .bottom) {
-                if let tab = viewModel.activeTab {
-                    AddBookmarkPopover(title: tab.title, url: tab.url) { title, url, folderId in
-                        bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
+
+            // Add to Favorites button (conditional)
+            if settings.showAddToFavoritesButton {
+                Button(action: toggleBookmark) {
+                    Image(systemName: isCurrentPageBookmarked ? "star.fill" : "star")
+                        .font(.system(size: 14))
+                        .foregroundColor(isCurrentPageBookmarked ? .yellow : Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help(isCurrentPageBookmarked ? "Remove Bookmark" : "Add Bookmark")
+                .popover(isPresented: $showingAddBookmark, arrowEdge: .bottom) {
+                    if let tab = viewModel.activeTab {
+                        AddBookmarkPopover(title: tab.title, url: tab.url) { title, url, folderId in
+                            bookmarkManager.addBookmark(title: title, url: url, folderId: folderId)
+                        }
                     }
                 }
             }
 
-            // Show bookmarks button
-            Button(action: { showingBookmarks = true }) {
-                Image(systemName: "book")
-                    .font(.system(size: 14))
-                    .foregroundColor(Color("TextMuted"))
-            }
-            .buttonStyle(.plain)
-            .padding(6)
-            .contentShape(Rectangle())
-            .help("Show Bookmarks")
-            .popover(isPresented: $showingBookmarks, arrowEdge: .bottom) {
-                BookmarksView(onNavigate: { url in
-                    viewModel.inputURL = url
-                    viewModel.navigate()
-                })
+            // Bookmarks button (conditional)
+            if settings.showBookmarksButton {
+                Button(action: { showingBookmarks = true }) {
+                    Image(systemName: "book")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help("Show Bookmarks")
+                .popover(isPresented: $showingBookmarks, arrowEdge: .bottom) {
+                    BookmarksView(onNavigate: { url in
+                        viewModel.inputURL = url
+                        viewModel.navigate()
+                    })
+                }
             }
         }
         .padding(.horizontal, 6)
@@ -132,7 +154,16 @@ struct AddressBar: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showBookmarks)) { _ in
-            showingBookmarks = true
+            // Only handle here if button is visible (popover mode)
+            if settings.showBookmarksButton {
+                showingBookmarks = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showDownloads)) { _ in
+            // Only handle here if button is visible (popover mode)
+            if settings.showDownloadsButton {
+                showingDownloads = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .bookmarkTab)) { _ in
             toggleBookmark()
@@ -141,7 +172,7 @@ struct AddressBar: View {
 
     private func toggleBookmark() {
         guard let tab = viewModel.activeTab, !tab.isSpecialPage else { return }
-        
+
         if isCurrentPageBookmarked {
              bookmarkManager.toggleBookmark(title: tab.title, url: tab.url)
         } else {

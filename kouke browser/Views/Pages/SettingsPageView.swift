@@ -72,6 +72,8 @@ struct SettingsPageView: View {
             switch selectedSection {
             case .general:
                 GeneralSettingsContent(settings: settings)
+            case .appearance:
+                AppearanceSettingsContent(settings: settings)
             case .tabs:
                 TabsSettingsContent(settings: settings)
             case .search:
@@ -91,6 +93,7 @@ struct SettingsPageView: View {
 
 private enum SettingsSidebarSection: CaseIterable {
     case general
+    case appearance
     case tabs
     case search
     case privacy
@@ -99,6 +102,7 @@ private enum SettingsSidebarSection: CaseIterable {
     var title: String {
         switch self {
         case .general: return "General"
+        case .appearance: return "Appearance"
         case .tabs: return "Tabs"
         case .search: return "Search"
         case .privacy: return "Privacy"
@@ -109,6 +113,7 @@ private enum SettingsSidebarSection: CaseIterable {
     var icon: String {
         switch self {
         case .general: return "gearshape"
+        case .appearance: return "paintbrush"
         case .tabs: return "square.on.square"
         case .search: return "magnifyingglass"
         case .privacy: return "hand.raised"
@@ -216,30 +221,6 @@ private struct GeneralSettingsContent: View {
                 }
             }
 
-            // Appearance
-            SettingsCard(title: "Appearance") {
-                SettingsPageRow(label: "Theme:") {
-                    Picker("", selection: $settings.theme) {
-                        ForEach(AppTheme.allCases, id: \.rawValue) { theme in
-                            Text(theme.displayName).tag(theme)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 140)
-                }
-
-                SettingsPageRow(label: "Default font size:") {
-                    Picker("", selection: $settings.fontSize) {
-                        ForEach([12, 13, 14, 15, 16, 18, 20, 24], id: \.self) { size in
-                            Text("\(size)").tag(size)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 80)
-                }
-            }
-
             // Downloads
             SettingsCard(title: "Downloads") {
                 SettingsPageRow(label: "Save files to:") {
@@ -264,6 +245,48 @@ private struct GeneralSettingsContent: View {
 
                 SettingsPageRow(label: "") {
                     Toggle("Open \"safe\" files after downloading", isOn: $settings.openSafeFilesAfterDownload)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Appearance Settings Content
+
+private struct AppearanceSettingsContent: View {
+    @ObservedObject var settings: BrowserSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsCard(title: "Theme") {
+                SettingsPageRow(label: "Appearance:") {
+                    Picker("", selection: $settings.theme) {
+                        ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                            Text(theme.displayName).tag(theme)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                }
+            }
+
+            SettingsCard(title: "Toolbar Buttons") {
+                Text("Choose which buttons to display in the address bar. When shown, clicking opens a popover. When hidden, use menu or keyboard shortcuts to open in a separate window.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.bottom, 8)
+
+                SettingsPageRow(label: "") {
+                    Toggle("Show Downloads button", isOn: $settings.showDownloadsButton)
+                }
+
+                SettingsPageRow(label: "") {
+                    Toggle("Show Bookmarks button", isOn: $settings.showBookmarksButton)
+                }
+
+                SettingsPageRow(label: "") {
+                    Toggle("Show Add to Favorites button", isOn: $settings.showAddToFavoritesButton)
                 }
             }
         }
