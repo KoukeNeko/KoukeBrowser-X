@@ -12,7 +12,7 @@ struct BookmarksView: View {
     @Environment(\.dismiss) private var dismiss
     let onNavigate: (String) -> Void
 
-    @State private var folderPath: [UUID] = []  // Navigation stack
+    @State private var folderPath: [UUID] = []
     @State private var editingBookmark: Bookmark? = nil
     @State private var editingFolder: BookmarkFolder? = nil
     @State private var showingNewFolderDialog = false
@@ -33,119 +33,40 @@ struct BookmarksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                // Back button when in a folder
-                if !folderPath.isEmpty {
-                    Button(action: { folderPath.removeLast() }) {
-                        Image(systemName: "chevron.left")
+            // Header using shared component
+            SheetHeader(
+                title: currentFolderName,
+                showBackButton: !folderPath.isEmpty,
+                onBack: { folderPath.removeLast() },
+                onDismiss: { dismiss() },
+                trailingButton: AnyView(
+                    Button(action: { showingNewFolderDialog = true }) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 14))
                             .foregroundColor(Color("TextMuted"))
                     }
                     .buttonStyle(.plain)
-                }
-
-                Text(currentFolderName)
-                    .font(.headline)
-
-                Spacer()
-
-                Button(action: { showingNewFolderDialog = true }) {
-                    Image(systemName: "folder.badge.plus")
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-                .help("New Folder")
-
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(Color("TitleBarBg"))
-
-            // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color("TextMuted"))
-                TextField("Search bookmarks", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color("TextMuted"))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(Color("TabInactive"))
-            .cornerRadius(6)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+                    .help("New Folder")
+                )
+            )
 
             Divider()
 
+            // Search using shared component
+            SheetSearchBar(text: $searchText, placeholder: "Search bookmarks")
+
             // Content
             if filteredBookmarks.isEmpty && filteredFolders.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "bookmark")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color("TextMuted"))
-                    Text(searchText.isEmpty ? "No bookmarks yet" : "No results found")
-                        .foregroundColor(Color("TextMuted"))
-                    if searchText.isEmpty {
-                        Text("Press \(Image(systemName: "command")) D to bookmark the current page")
-                            .font(.caption)
-                            .foregroundColor(Color("TextMuted"))
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                SheetEmptyState(
+                    icon: "bookmark",
+                    title: searchText.isEmpty ? "No bookmarks yet" : "No results found",
+                    subtitle: searchText.isEmpty ? "Press ⌘D to bookmark the current page" : nil
+                )
             } else {
-                List {
-                    // Folders
-                    ForEach(filteredFolders) { folder in
-                        FolderRow(folder: folder, onTap: {
-                            folderPath.append(folder.id)
-                        }, onEdit: { editingFolder = folder })
-                            .contextMenu {
-                                Button("Rename") { editingFolder = folder }
-                                Button("Delete", role: .destructive) {
-                                    bookmarkManager.removeFolder(folder.id)
-                                }
-                            }
-                    }
-
-                    // Bookmarks
-                    ForEach(filteredBookmarks) { bookmark in
-                        BookmarkRow(bookmark: bookmark, onNavigate: {
-                            onNavigate(bookmark.url)
-                            dismiss()
-                        }, onEdit: {
-                            editingBookmark = bookmark
-                        })
-                        .contextMenu {
-                            Button("Open") {
-                                onNavigate(bookmark.url)
-                                dismiss()
-                            }
-                            Button("Open in New Tab") {
-                                NotificationCenter.default.post(name: .openURLInNewTab, object: bookmark.url)
-                                dismiss()
-                            }
-                            Divider()
-                            Button("Edit") { editingBookmark = bookmark }
-                            Button("Delete", role: .destructive) {
-                                bookmarkManager.removeBookmark(bookmark.id)
-                            }
-                        }
-                    }
-                }
-                .listStyle(.plain)
+                bookmarksList
             }
         }
-        .frame(minWidth: 280, minHeight: 400)
+        .frame(minWidth: 320, maxWidth: 400, minHeight: 400, maxHeight: 600)
         .background(Color("Bg"))
         .sheet(item: $editingBookmark) { bookmark in
             EditBookmarkView(bookmark: bookmark) { updatedTitle, updatedURL, updatedFolderId in
@@ -166,6 +87,51 @@ struct BookmarksView: View {
                     newFolderName = ""
                 }
             }
+        }
+    }
+
+    private var bookmarksList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                // Folders
+                ForEach(filteredFolders) { folder in
+                    BookmarkFolderRow(folder: folder, onTap: {
+                        folderPath.append(folder.id)
+                    }, onEdit: { editingFolder = folder })
+                        .contextMenu {
+                            Button("Rename") { editingFolder = folder }
+                            Button("Delete", role: .destructive) {
+                                bookmarkManager.removeFolder(folder.id)
+                            }
+                        }
+                }
+
+                // Bookmarks
+                ForEach(filteredBookmarks) { bookmark in
+                    BookmarkItemRow(bookmark: bookmark, onNavigate: {
+                        onNavigate(bookmark.url)
+                        dismiss()
+                    }, onEdit: {
+                        editingBookmark = bookmark
+                    })
+                    .contextMenu {
+                        Button("Open") {
+                            onNavigate(bookmark.url)
+                            dismiss()
+                        }
+                        Button("Open in New Tab") {
+                            NotificationCenter.default.post(name: .openURLInNewTab, object: bookmark.url)
+                            dismiss()
+                        }
+                        Divider()
+                        Button("Edit") { editingBookmark = bookmark }
+                        Button("Delete", role: .destructive) {
+                            bookmarkManager.removeBookmark(bookmark.id)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -191,98 +157,114 @@ struct BookmarksView: View {
     }
 }
 
-// MARK: - Bookmark Row
+// MARK: - Bookmark Item Row
 
-struct BookmarkRow: View {
+struct BookmarkItemRow: View {
     let bookmark: Bookmark
     let onNavigate: () -> Void
     let onEdit: () -> Void
-
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            // Favicon
-            AsyncImage(url: bookmark.faviconURL) { image in
-                image.resizable().aspectRatio(contentMode: .fit)
-            } placeholder: {
-                Image(systemName: "globe")
-                    .foregroundColor(Color("TextMuted"))
-            }
-            .frame(width: 16, height: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(bookmark.title)
-                    .lineLimit(1)
-                    .foregroundColor(Color("Text"))
-
-                Text(bookmark.url)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .foregroundColor(Color("TextMuted"))
-            }
-
-            Spacer()
-
-            if isHovering {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
+        Button(action: onNavigate) {
+            HStack(spacing: 12) {
+                AsyncImage(url: bookmark.faviconURL) { image in
+                    image.resizable().aspectRatio(contentMode: .fit)
+                } placeholder: {
+                    Image(systemName: "globe")
                         .foregroundColor(Color("TextMuted"))
                 }
-                .buttonStyle(.plain)
+                .frame(width: 16, height: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bookmark.title)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color("Text"))
+                        .lineLimit(1)
+
+                    Text(bookmark.url)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if isHovering {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color("TextMuted"))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .background(isHovering ? Color("CardBg") : Color.clear)
+            .cornerRadius(6)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onNavigate()
-        }
+        .buttonStyle(.plain)
         .onHover { hovering in
             isHovering = hovering
         }
     }
 }
 
-// MARK: - Folder Row
+// MARK: - Bookmark Folder Row
 
-struct FolderRow: View {
+struct BookmarkFolderRow: View {
     let folder: BookmarkFolder
     let onTap: () -> Void
     let onEdit: () -> Void
-
+    @ObservedObject private var bookmarkManager = BookmarkManager.shared
     @State private var isHovering = false
 
+    private var bookmarkCount: Int {
+        bookmarkManager.bookmarks(in: folder.id).count
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "folder.fill")
-                .foregroundColor(.blue)
-                .frame(width: 16, height: 16)
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.yellow)
+                    .frame(width: 16, height: 16)
 
-            Text(folder.name)
-                .lineLimit(1)
-                .foregroundColor(Color("Text"))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(folder.name)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color("Text"))
+                        .lineLimit(1)
 
-            Spacer()
-
-            if isHovering {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
+                    Text(bookmarkCount == 1 ? "1 bookmark" : "\(bookmarkCount) bookmarks")
+                        .font(.system(size: 11))
                         .foregroundColor(Color("TextMuted"))
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-            }
 
-            Image(systemName: "chevron.right")
-                .foregroundColor(Color("TextMuted"))
-                .font(.caption)
+                Spacer()
+
+                if isHovering {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color("TextMuted"))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color("TextMuted"))
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .background(isHovering ? Color("CardBg") : Color.clear)
+            .cornerRadius(6)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
+        .buttonStyle(.plain)
         .onHover { hovering in
             isHovering = hovering
         }
@@ -499,7 +481,7 @@ struct AddBookmarkPopover: View {
     let onSave: (String, String, UUID?) -> Void
 
     @State private var title: String
-    @State private var folderPath: [UUID] = []  // Navigation stack
+    @State private var folderPath: [UUID] = []
 
     private var currentFolderId: UUID? {
         folderPath.last
@@ -522,102 +504,139 @@ struct AddBookmarkPopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                if !folderPath.isEmpty {
-                    Button(action: { folderPath.removeLast() }) {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(Color("TextMuted"))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Text(folderPath.isEmpty ? "Add Bookmark" : currentFolderName)
-                    .font(.headline)
-
-                Spacer()
-
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .foregroundColor(Color("TextMuted"))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(Color("TitleBarBg"))
-
-            // Name field
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Name")
-                    .font(.caption)
-                    .foregroundColor(Color("TextMuted"))
-                TextField("Bookmark name", text: $title)
-                    .textFieldStyle(.roundedBorder)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            // Header using shared component
+            SheetHeader(
+                title: folderPath.isEmpty ? "Add Bookmark" : currentFolderName,
+                showBackButton: !folderPath.isEmpty,
+                onBack: { folderPath.removeLast() },
+                onDismiss: { dismiss() }
+            )
 
             Divider()
 
+            // Name input using shared component
+            SheetInputField(label: "Name", text: $title, placeholder: "Bookmark name", icon: "bookmark.fill")
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+            // URL preview
+            HStack(spacing: 8) {
+                Image(systemName: "link")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color("TextMuted"))
+                Text(initialURL)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            // Folder section header using shared component
+            SheetSectionHeader(title: "Location")
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+
             // Folder list
-            List {
-                // "Save here" button (always shows current location)
-                Button(action: {
-                    onSave(title, initialURL, currentFolderId)
-                    dismiss()
-                }) {
-                    HStack(spacing: 10) {
-                        Image(systemName: folderPath.isEmpty ? "bookmark.fill" : "folder.fill")
-                            .foregroundColor(.blue)
-                            .frame(width: 16, height: 16)
-                        Text("Add to \"\(currentFolderName)\"")
-                            .foregroundColor(Color("Text"))
-                            .fontWeight(.medium)
-                        Spacer()
-                        if folderPath.isEmpty {
-                            Image(systemName: "checkmark")
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    // Save to current location button
+                    Button(action: {
+                        onSave(title, initialURL, currentFolderId)
+                        dismiss()
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16))
                                 .foregroundColor(.blue)
-                                .font(.caption)
+
+                            Text("Add to \"\(currentFolderName)\"")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color("Text"))
+
+                            Spacer()
                         }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .background(Color("CardBg").opacity(0.5))
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                // Subfolders
-                ForEach(bookmarkManager.folders(in: currentFolderId)) { folder in
-                    HStack(spacing: 10) {
-                        Image(systemName: "folder")
-                            .foregroundColor(Color("TextMuted"))
-                            .frame(width: 16, height: 16)
-
-                        Text(folder.name)
-                            .lineLimit(1)
-                            .foregroundColor(Color("Text"))
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(Color("TextMuted"))
-                            .font(.caption)
-                    }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        // Navigate into folder
-                        folderPath.append(folder.id)
+                    // Subfolders
+                    ForEach(bookmarkManager.folders(in: currentFolderId)) { folder in
+                        FolderSelectionRow(
+                            folder: folder,
+                            onTap: { folderPath.append(folder.id) }
+                        )
                     }
                 }
             }
-            .listStyle(.plain)
+
+            // Bottom buttons using shared component
+            SheetButtonBar(
+                leading: {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.escape)
+                        .foregroundColor(Color("TextMuted"))
+                },
+                trailing: {
+                    Button(action: {
+                        onSave(title, initialURL, currentFolderId)
+                        dismiss()
+                    }) {
+                        Text("Add Bookmark")
+                            .fontWeight(.medium)
+                    }
+                    .keyboardShortcut(.return)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(title.isEmpty)
+                }
+            )
         }
-        .frame(minWidth: 280, minHeight: 300)
+        .frame(minWidth: 320, maxWidth: 400, minHeight: 400, maxHeight: 500)
         .background(Color("Bg"))
     }
 }
+
+// MARK: - Folder Selection Row
+
+struct FolderSelectionRow: View {
+    let folder: BookmarkFolder
+    let onTap: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.yellow)
+
+                Text(folder.name)
+                    .font(.system(size: 13))
+                    .foregroundColor(Color("Text"))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color("TextMuted"))
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .background(isHovering ? Color("CardBg") : Color.clear)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
 
 // MARK: - Notification Extension
 
