@@ -46,6 +46,14 @@ struct AddressBar: View {
         return bookmarkManager.isBookmarked(url: tab.url)
     }
 
+    private var isReaderModeAvailable: Bool {
+        viewModel.activeTab?.readerModeAvailable == true
+    }
+
+    private var isReaderModeActive: Bool {
+        viewModel.activeTab?.isReaderMode == true
+    }
+
     private var currentSecurityInfo: SecurityInfo {
         viewModel.activeTab?.securityInfo ?? SecurityInfo.fromURL(viewModel.activeTab?.url ?? "")
     }
@@ -154,9 +162,41 @@ struct AddressBar: View {
         }
     }
 
+    private func toggleReaderMode() {
+        guard let tabId = viewModel.activeTabId,
+              let webView = viewModel.getActiveWebView() else { return }
+
+        if isReaderModeActive {
+            // Exit reader mode
+            viewModel.setReaderMode(false, for: tabId)
+            viewModel.readerArticle = nil
+        } else {
+            // Enter reader mode - extract article
+            ReaderModeService.shared.extractArticle(webView: webView) { article in
+                if let article = article {
+                    viewModel.readerArticle = article
+                    viewModel.setReaderMode(true, for: tabId)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func toolbarButton(for button: ToolbarButton) -> some View {
         switch button {
+        case .readerMode:
+            if settings.showReaderModeButton && isReaderModeAvailable {
+                Button(action: toggleReaderMode) {
+                    Image(systemName: isReaderModeActive ? "doc.plaintext.fill" : "doc.plaintext")
+                        .font(.system(size: 14))
+                        .foregroundColor(isReaderModeActive ? Color.accentColor : Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help(isReaderModeActive ? "Exit Reader Mode" : "Enter Reader Mode")
+            }
+
         case .addToFavorites:
             if settings.showAddToFavoritesButton {
                 Button(action: toggleBookmark) {

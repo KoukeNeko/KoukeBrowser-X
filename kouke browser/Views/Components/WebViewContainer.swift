@@ -257,6 +257,14 @@ struct WebViewContainer: NSViewRepresentable {
                     )
                 }
 
+                // Check reader mode availability
+                ReaderModeService.shared.checkReadability(webView: webView) { [weak self] isReadable in
+                    guard let self = self else { return }
+                    Task { @MainActor in
+                        self.parent.viewModel.updateTabReaderModeAvailable(isReadable, for: self.parent.tabId)
+                    }
+                }
+
                 // Capture thumbnail after page loads with a slight delay for rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     self.parent.viewModel.captureTabThumbnail(for: self.parent.tabId)

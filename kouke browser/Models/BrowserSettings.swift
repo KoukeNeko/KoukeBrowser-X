@@ -181,6 +181,7 @@ enum RemoveHistoryItems: String, CaseIterable {
 }
 
 enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
+    case readerMode = "reader_mode"
     case addToFavorites = "add_to_favorites"
     case downloads = "downloads"
     case bookmarks = "bookmarks"
@@ -189,6 +190,7 @@ enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
 
     var displayName: String {
         switch self {
+        case .readerMode: return "Reader Mode"
         case .addToFavorites: return "Add to Favorites"
         case .downloads: return "Downloads"
         case .bookmarks: return "Bookmarks"
@@ -197,6 +199,7 @@ enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
 
     var icon: String {
         switch self {
+        case .readerMode: return "doc.plaintext"
         case .addToFavorites: return "star"
         case .downloads: return "arrow.down.circle"
         case .bookmarks: return "book"
@@ -342,6 +345,10 @@ class BrowserSettings: ObservableObject {
     }
 
     // Toolbar appearance settings
+    @Published var showReaderModeButton: Bool {
+        didSet { defaults.set(showReaderModeButton, forKey: "showReaderModeButton") }
+    }
+
     @Published var showDownloadsButton: Bool {
         didSet { defaults.set(showDownloadsButton, forKey: "showDownloadsButton") }
     }
@@ -524,6 +531,12 @@ class BrowserSettings: ObservableObject {
         blockAllCookies = defaults.bool(forKey: "blockAllCookies")
 
         // Toolbar appearance settings - default to true (visible)
+        if defaults.object(forKey: "showReaderModeButton") != nil {
+            showReaderModeButton = defaults.bool(forKey: "showReaderModeButton")
+        } else {
+            showReaderModeButton = true
+        }
+
         if defaults.object(forKey: "showDownloadsButton") != nil {
             showDownloadsButton = defaults.bool(forKey: "showDownloadsButton")
         } else {
@@ -562,7 +575,7 @@ class BrowserSettings: ObservableObject {
                 }
             }
         } else {
-            toolbarButtonOrder = [.addToFavorites, .downloads, .bookmarks]
+            toolbarButtonOrder = [.readerMode, .addToFavorites, .downloads, .bookmarks]
         }
 
         // Apply saved theme on startup
