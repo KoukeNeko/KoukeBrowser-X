@@ -105,7 +105,19 @@ class BrowserViewModel: ObservableObject {
     // MARK: - Tab Management
 
     func addTab() {
-        let newTab = Tab()
+        let newTab: Tab
+
+        switch settings.newTabOpensWith {
+        case .startPage:
+            newTab = Tab(title: "New Tab", url: KoukeScheme.blank)
+        case .homepage:
+            let url = settings.homepage.isEmpty ? KoukeScheme.blank : settings.homepage
+            let title = extractHostname(from: url) ?? "New Tab"
+            newTab = Tab(title: title, url: url, isLoading: !url.hasPrefix("kouke:"))
+        case .emptyPage:
+            newTab = Tab(title: "New Tab", url: "about:blank")
+        }
+
         tabs.append(newTab)
         switchToTab(newTab.id)
     }
@@ -412,7 +424,7 @@ class BrowserViewModel: ObservableObject {
                                     height: 100vh;
                                     box-sizing: border-box;
                                 }
-                                
+
                                 /* Line numbers styling */
                                 .line-numbers .line-numbers-rows {
                                     border-right: 1px solid #404040;
@@ -427,7 +439,7 @@ class BrowserViewModel: ObservableObject {
                                 .token.attr-name { color: #9cdcfe; }
                                 .token.attr-value, .token.string { color: #ce9178; }
                                 .token.comment { color: #6a9955; }
-                                
+
                                 code[class*="language-"] {
                                     font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
                                 }
@@ -438,7 +450,7 @@ class BrowserViewModel: ObservableObject {
                                 ::-webkit-scrollbar-thumb { background: #424242; border-radius: 5px; border: 2px solid #1e1e1e; }
                                 ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
                                 ::-webkit-scrollbar-corner { background: #1e1e1e; }
-                                
+
                                 /* Toolbar styling */
                                 #toolbar {
                                     position: fixed;
@@ -463,7 +475,7 @@ class BrowserViewModel: ObservableObject {
                                     align-items: center;
                                     gap: 6px;
                                 }
-                                
+
                                 /* Content padding for toolbar */
                                 pre[class*="language-"] {
                                     padding-top: 48px !important;
@@ -477,33 +489,33 @@ class BrowserViewModel: ObservableObject {
                                     自動換行
                                 </label>
                             </div>
-                        
+
                             <pre class="line-numbers" id="code-pre"><code class="language-html">\(escapedHTML)</code></pre>
-                            
+
                             <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
                             <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
                             <script>
                                 const toggle = document.getElementById('line-wrap-toggle');
                                 const preEl = document.getElementById('code-pre');
                                 const codeEl = document.querySelector('code');
-                                
+
                                 // Sync line number heights with wrapped content
                                 function syncLineNumbers() {
                                     const lineNumberRows = preEl.querySelector('.line-numbers-rows');
                                     if (!lineNumberRows) return;
-                                    
+
                                     const spans = lineNumberRows.querySelectorAll('span');
                                     const lines = codeEl.innerHTML.split('\\n');
                                     const lineHeight = parseFloat(getComputedStyle(codeEl).lineHeight);
                                     const isWrapping = toggle.checked;
-                                    
+
                                     // Create a measurement div
                                     const measure = document.createElement('div');
-                                    measure.style.cssText = 'position:absolute;visibility:hidden;white-space:' + 
+                                    measure.style.cssText = 'position:absolute;visibility:hidden;white-space:' +
                                         (isWrapping ? 'pre-wrap' : 'pre') + ';word-wrap:break-word;overflow-wrap:break-word;' +
                                         'font:' + getComputedStyle(codeEl).font + ';width:' + codeEl.clientWidth + 'px;';
                                     document.body.appendChild(measure);
-                                    
+
                                     spans.forEach((span, i) => {
                                         if (isWrapping && i < lines.length) {
                                             measure.innerHTML = lines[i] || '&nbsp;';
@@ -513,10 +525,10 @@ class BrowserViewModel: ObservableObject {
                                             span.style.height = '';
                                         }
                                     });
-                                    
+
                                     measure.remove();
                                 }
-                                
+
                                 toggle.addEventListener('change', (e) => {
                                     if (e.target.checked) {
                                         preEl.style.whiteSpace = 'pre-wrap';
@@ -536,7 +548,7 @@ class BrowserViewModel: ObservableObject {
                                     // Recalculate line heights after DOM update
                                     requestAnimationFrame(syncLineNumbers);
                                 });
-                                
+
                                 // Recalculate on window resize
                                 window.addEventListener('resize', () => {
                                     if (toggle.checked) requestAnimationFrame(syncLineNumbers);

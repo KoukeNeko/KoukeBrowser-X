@@ -130,6 +130,56 @@ enum OpenPagesInTabs: String, CaseIterable {
     }
 }
 
+enum NewWindowOpensWith: String, CaseIterable {
+    case startPage = "start_page"
+    case homepage = "homepage"
+    case emptyPage = "empty_page"
+    case samePage = "same_page"
+
+    var displayName: String {
+        switch self {
+        case .startPage: return "Start Page"
+        case .homepage: return "Homepage"
+        case .emptyPage: return "Empty Page"
+        case .samePage: return "Same Page"
+        }
+    }
+}
+
+enum NewTabOpensWith: String, CaseIterable {
+    case startPage = "start_page"
+    case homepage = "homepage"
+    case emptyPage = "empty_page"
+
+    var displayName: String {
+        switch self {
+        case .startPage: return "Start Page"
+        case .homepage: return "Homepage"
+        case .emptyPage: return "Empty Page"
+        }
+    }
+}
+
+enum RemoveHistoryItems: String, CaseIterable {
+    case afterOneDay = "after_one_day"
+    case afterOneWeek = "after_one_week"
+    case afterTwoWeeks = "after_two_weeks"
+    case afterOneMonth = "after_one_month"
+    case afterOneYear = "after_one_year"
+    case manually = "manually"
+
+    var displayName: String {
+        switch self {
+        case .afterOneDay: return "After one day"
+        case .afterOneWeek: return "After one week"
+        case .afterTwoWeeks: return "After two weeks"
+        case .afterOneMonth: return "After one month"
+        case .afterOneYear: return "After one year"
+        case .manually: return "Manually"
+        }
+    }
+}
+
 class BrowserSettings: ObservableObject {
     static let shared = BrowserSettings()
 
@@ -168,6 +218,26 @@ class BrowserSettings: ObservableObject {
 
     @Published var startupURL: String {
         didSet { defaults.set(startupURL, forKey: "startupURL") }
+    }
+
+    @Published var homepage: String {
+        didSet { defaults.set(homepage, forKey: "homepage") }
+    }
+
+    @Published var newWindowOpensWith: NewWindowOpensWith {
+        didSet { defaults.set(newWindowOpensWith.rawValue, forKey: "newWindowOpensWith") }
+    }
+
+    @Published var newTabOpensWith: NewTabOpensWith {
+        didSet { defaults.set(newTabOpensWith.rawValue, forKey: "newTabOpensWith") }
+    }
+
+    @Published var removeHistoryItems: RemoveHistoryItems {
+        didSet { defaults.set(removeHistoryItems.rawValue, forKey: "removeHistoryItems") }
+    }
+
+    @Published var openSafeFilesAfterDownload: Bool {
+        didSet { defaults.set(openSafeFilesAfterDownload, forKey: "openSafeFilesAfterDownload") }
     }
 
     @Published var tabBarStyle: TabBarStyle {
@@ -287,6 +357,31 @@ class BrowserSettings: ObservableObject {
         }
 
         startupURL = defaults.string(forKey: "startupURL") ?? ""
+
+        homepage = defaults.string(forKey: "homepage") ?? ""
+
+        if let newWindowOpensWithRaw = defaults.string(forKey: "newWindowOpensWith"),
+           let loadedNewWindowOpensWith = NewWindowOpensWith(rawValue: newWindowOpensWithRaw) {
+            newWindowOpensWith = loadedNewWindowOpensWith
+        } else {
+            newWindowOpensWith = .startPage
+        }
+
+        if let newTabOpensWithRaw = defaults.string(forKey: "newTabOpensWith"),
+           let loadedNewTabOpensWith = NewTabOpensWith(rawValue: newTabOpensWithRaw) {
+            newTabOpensWith = loadedNewTabOpensWith
+        } else {
+            newTabOpensWith = .startPage
+        }
+
+        if let removeHistoryItemsRaw = defaults.string(forKey: "removeHistoryItems"),
+           let loadedRemoveHistoryItems = RemoveHistoryItems(rawValue: removeHistoryItemsRaw) {
+            removeHistoryItems = loadedRemoveHistoryItems
+        } else {
+            removeHistoryItems = .afterOneYear
+        }
+
+        openSafeFilesAfterDownload = defaults.bool(forKey: "openSafeFilesAfterDownload")
 
         if let tabBarStyleRaw = defaults.string(forKey: "tabBarStyle"),
            let loadedTabBarStyle = TabBarStyle(rawValue: tabBarStyleRaw) {
@@ -439,4 +534,5 @@ class BrowserSettings: ObservableObject {
 extension Notification.Name {
     static let developerSettingsChanged = Notification.Name("developerSettingsChanged")
     static let fontSizeChanged = Notification.Name("fontSizeChanged")
+    static let setCurrentPageAsHomepage = Notification.Name("setCurrentPageAsHomepage")
 }

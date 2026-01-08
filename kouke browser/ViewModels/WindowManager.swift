@@ -78,13 +78,35 @@ class WindowManager {
         // Create a new view model with the detached tab and its WebView, or a new blank tab
         let viewModel: BrowserViewModel
         let windowTab: Tab
+        let settings = BrowserSettings.shared
 
         if let existingTab = tab {
             viewModel = BrowserViewModel(initialTab: existingTab, initialWebView: webView)
             windowTab = existingTab
         } else {
-            // Create a new blank tab
-            let newTab = Tab(title: "New Tab", url: KoukeScheme.blank)
+            // Create a new tab based on newWindowOpensWith setting
+            let newTab: Tab
+
+            switch settings.newWindowOpensWith {
+            case .startPage:
+                newTab = Tab(title: "New Tab", url: KoukeScheme.blank)
+            case .homepage:
+                let url = settings.homepage.isEmpty ? KoukeScheme.blank : settings.homepage
+                let title = URL(string: url)?.host ?? "New Tab"
+                newTab = Tab(title: title, url: url, isLoading: !url.hasPrefix("kouke:"))
+            case .emptyPage:
+                newTab = Tab(title: "New Tab", url: "about:blank")
+            case .samePage:
+                // Get the current page URL from the key window's active tab
+                if let currentViewModel = windowViewModels.values.first(where: { vm in
+                    windowViewModels.contains { $0.value === vm }
+                }), let activeTab = currentViewModel.activeTab {
+                    newTab = Tab(title: activeTab.title, url: activeTab.url, isLoading: !activeTab.isSpecialPage)
+                } else {
+                    newTab = Tab(title: "New Tab", url: KoukeScheme.blank)
+                }
+            }
+
             viewModel = BrowserViewModel(initialTab: newTab, initialWebView: nil)
             windowTab = newTab
         }
@@ -220,6 +242,7 @@ struct BrowserViewForWindow: View {
             .modifier(WindowBookmarksMenuModifier(showBookmarks: $showBookmarks, showBookmarkAllTabsAlert: $showBookmarkAllTabsAlert))
             .modifier(WindowDeveloperMenuModifier(viewModel: viewModel, settings: settings))
             .modifier(WindowKoukeURLModifier(viewModel: viewModel))
+            .modifier(WindowSettingsModifier(viewModel: viewModel))
             .alert("Bookmark All Tabs", isPresented: $showBookmarkAllTabsAlert) {
                 Button("Cancel", role: .cancel) {}
                 Button("Bookmark All") {
@@ -479,6 +502,19 @@ private struct WindowKoukeURLModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .openKoukeURL)) { notification in
                 if let urlString = notification.userInfo?["url"] as? String {
                     viewModel.openKoukeURL(urlString)
+                }
+            }
+    }
+}
+
+private struct WindowSettingsModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .setCurrentPageAsHomepage)) { _ in
+                if let activeTab = viewModel.activeTab, !activeTab.isSpecialPage {
+                    BrowserSettings.shared.homepage = activeTab.url
                 }
             }
     }
