@@ -63,6 +63,11 @@ struct BrowserView: View {
             .onReceive(NotificationCenter.default.publisher(for: .clearHistory)) { _ in
                 HistoryManager.shared.clearHistory()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openKoukeURL)) { notification in
+                if let urlString = notification.userInfo?["url"] as? String {
+                    viewModel.openKoukeURL(urlString)
+                }
+            }
     }
 
     // MARK: - View Components
@@ -120,8 +125,11 @@ struct BrowserView: View {
         ZStack {
             ForEach(viewModel.tabs) { tab in
                 Group {
-                    if tab.url == "kouke:blank" {
-                        StartPage(onNavigate: viewModel.navigateFromStartPage)
+                    if tab.isSpecialPage {
+                        KoukePageView(
+                            url: tab.url,
+                            onNavigate: viewModel.navigateFromStartPage
+                        )
                     } else {
                         WebViewContainer(
                             tabId: tab.id,

@@ -17,6 +17,9 @@ struct kouke_browserApp: App {
             ContentView()
                 .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
                 .handlesExternalEvents(preferring: Set(arrayLiteral: "main"), allowing: Set(arrayLiteral: "*"))
+                .onOpenURL { url in
+                    handleIncomingURL(url)
+                }
         }
         .handlesExternalEvents(matching: Set(arrayLiteral: "main"))
         #if os(macOS)
@@ -174,16 +177,42 @@ struct kouke_browserApp: App {
                 }
             }
 
-            // Settings command handled by Settings scene
-        }
-        #endif
-
-        // Settings window (separate native window like Safari)
-        #if os(macOS)
-        Settings {
-            SettingsView()
-                .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
+            // Replace default Settings command to open kouke:settings in new tab
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    NotificationCenter.default.post(
+                        name: .openKoukeURL,
+                        object: nil,
+                        userInfo: ["url": KoukeScheme.settings]
+                    )
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
         #endif
     }
+
+    /// Handle incoming kouke: URL scheme
+    private func handleIncomingURL(_ url: URL) {
+        // Convert URL to kouke: format string
+        // URL comes as "kouke:settings" -> absoluteString is "kouke:settings"
+        let urlString = url.absoluteString
+
+        // Only handle kouke: scheme URLs
+        guard KoukeScheme.isKoukeURL(urlString) else { return }
+
+        // Post notification to open the URL in the active window
+        NotificationCenter.default.post(
+            name: .openKoukeURL,
+            object: nil,
+            userInfo: ["url": urlString]
+        )
+    }
+}
+
+// MARK: - App-level Notifications
+
+extension Notification.Name {
+    /// Notification to open a kouke: URL from external source
+    static let openKoukeURL = Notification.Name("openKoukeURL")
 }
