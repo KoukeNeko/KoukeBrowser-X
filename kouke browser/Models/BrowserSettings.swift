@@ -9,6 +9,9 @@ import Foundation
 import SwiftUI
 import WebKit
 import Combine
+#if os(macOS)
+import AppKit
+#endif
 
 enum SearchEngine: String, CaseIterable {
     case google = "google"
@@ -91,11 +94,26 @@ class BrowserSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var theme: AppTheme {
-        didSet { defaults.set(theme.rawValue, forKey: "theme") }
+        didSet {
+            defaults.set(theme.rawValue, forKey: "theme")
+            applyTheme()
+        }
+    }
+
+    /// Apply theme to the entire app
+    func applyTheme() {
+        #if os(macOS)
+        DispatchQueue.main.async {
+            NSApp.appearance = NSAppearance(named: self.theme == .dark ? .darkAqua : .aqua)
+        }
+        #endif
     }
 
     @Published var fontSize: Int {
-        didSet { defaults.set(fontSize, forKey: "fontSize") }
+        didSet {
+            defaults.set(fontSize, forKey: "fontSize")
+            NotificationCenter.default.post(name: .fontSizeChanged, object: fontSize)
+        }
     }
 
     @Published var searchEngine: SearchEngine {
@@ -167,6 +185,9 @@ class BrowserSettings: ObservableObject {
         // Developer settings
         disableJavaScript = defaults.bool(forKey: "disableJavaScript")
         disableImages = defaults.bool(forKey: "disableImages")
+
+        // Apply saved theme on startup
+        applyTheme()
     }
 
     func getSearchURL(for query: String) -> String {
@@ -215,4 +236,5 @@ class BrowserSettings: ObservableObject {
 
 extension Notification.Name {
     static let developerSettingsChanged = Notification.Name("developerSettingsChanged")
+    static let fontSizeChanged = Notification.Name("fontSizeChanged")
 }
