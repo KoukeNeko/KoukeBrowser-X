@@ -289,10 +289,155 @@ class BrowserViewModel: ObservableObject {
         return webViews[id]
     }
 
-    // TODO: Implement VS Code-like View Source UI with syntax highlighting, line numbers, and line wrapping toggle
-    /// View the HTML source of the current page
+    /// View the HTML source of the current page in a new tab with VS Code-like styling
     func viewSource() {
-        // TODO: Implementation pending
+        guard let webView = getActiveWebView(), let currentURL = activeTab?.url else { return }
+        webView.evaluateJavaScript("document.documentElement.outerHTML") { [weak self] result, error in
+            guard let self = self, let html = result as? String else { return }
+
+            Task { @MainActor in
+                // Create a new tab with kouke:// protocol
+                let encodedURL = currentURL.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? currentURL
+                let sourceURL = "kouke://view-source/\(encodedURL)"
+                let newTab = Tab(title: "Source: \(currentURL)", url: sourceURL)
+                self.tabs.append(newTab)
+                self.switchToTab(newTab.id)
+
+                // After a short delay, inject the source into a VS Code-like viewer
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    if let newWebView = self.webViews[newTab.id] {
+                        let escapedHTML = html
+                            .replacingOccurrences(of: "&", with: "&amp;")
+                            .replacingOccurrences(of: "<", with: "&lt;")
+                            .replacingOccurrences(of: ">", with: "&gt;")
+
+                        let viewerHTML = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>View Source: \(currentURL)</title>
+                            <!-- Prism.js for Syntax Highlighting -->
+                            <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+                            <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
+                            <style>
+                                body {
+                                    margin: 0;
+                                    padding: 0;
+                                    background: #1e1e1e;
+                                    color: #d4d4d4;
+                                }
+                                /* VS Code styling overrides */
+                                pre[class*="language-"] {
+                                    background: #1e1e1e;
+                                    text-shadow: none;
+                                    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+                                    font-size: 12px;
+                                    line-height: 1.5;
+                                    direction: ltr;
+                                    text-align: left;
+                                    white-space: pre;
+                                    word-spacing: normal;
+                                    word-break: normal;
+                                    tab-size: 4;
+                                    hyphens: none;
+                                    padding: 1em;
+                                    margin: 0;
+                                    overflow: auto;
+                                    height: 100vh;
+                                    box-sizing: border-box;
+                                }
+                                
+                                /* Line numbers styling */
+                                .line-numbers .line-numbers-rows {
+                                    border-right: 1px solid #404040;
+                                }
+                                .line-numbers-rows > span:before {
+                                    color: #858585;
+                                }
+
+                                /* VS Code Dark+ token colors */
+                                .token.punctuation { color: #d4d4d4; }
+                                .token.tag { color: #569cd6; }
+                                .token.attr-name { color: #9cdcfe; }
+                                .token.attr-value, .token.string { color: #ce9178; }
+                                .token.comment { color: #6a9955; }
+                                
+                                code[class*="language-"] {
+                                    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+                                }
+
+                                /* Custom Scrollbar */
+                                ::-webkit-scrollbar { width: 10px; height: 10px; }
+                                ::-webkit-scrollbar-track { background: #1e1e1e; }
+                                ::-webkit-scrollbar-thumb { background: #424242; border-radius: 5px; border: 2px solid #1e1e1e; }
+                                ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+                                ::-webkit-scrollbar-corner { background: #1e1e1e; }
+                                
+                                /* Toolbar styling */
+                                #toolbar {
+                                    position: fixed;
+                                    top: 0;
+                                    left: 0;
+                                    right: 0;
+                                    height: 32px;
+                                    background: #252526;
+                                    border-bottom: 1px solid #3e3e42;
+                                    display: flex;
+                                    align-items: center;
+                                    padding: 0 12px;
+                                    z-index: 1000;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                    font-size: 12px;
+                                    color: #cccccc;
+                                }
+                                #toolbar label {
+                                    cursor: pointer;
+                                    user-select: none;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 6px;
+                                }
+                                
+                                /* Content padding for toolbar */
+                                pre[class*="language-"] {
+                                    padding-top: 48px !important;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div id="toolbar">
+                                <label>
+                                    <input type="checkbox" id="line-wrap-toggle">
+                                    自動換行
+                                </label>
+                            </div>
+                        
+                            <pre class="line-numbers" id="code-pre"><code class="language-html">\(escapedHTML)</code></pre>
+                            
+                            <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+                            <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+                            <script>
+                                const toggle = document.getElementById('line-wrap-toggle');
+                                const codeEl = document.querySelector('code');
+                                
+                                toggle.addEventListener('change', (e) => {
+                                    if (e.target.checked) {
+                                        codeEl.style.whiteSpace = 'pre-wrap';
+                                        codeEl.style.wordBreak = 'break-all';
+                                    } else {
+                                        codeEl.style.whiteSpace = 'pre';
+                                        codeEl.style.wordBreak = 'normal';
+                                    }
+                                });
+                            </script>
+                        </body>
+                        </html>
+                        """
+                        newWebView.loadHTMLString(viewerHTML, baseURL: nil)
+                    }
+                }
+            }
+        }
     }
 
     /// Open Web Inspector for the active tab
