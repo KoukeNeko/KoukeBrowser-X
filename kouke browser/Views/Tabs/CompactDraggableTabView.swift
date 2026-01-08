@@ -25,12 +25,12 @@ struct CompactDraggableTabView: NSViewRepresentable {
     let onInputURLChange: (String) -> Void
     let onNavigate: () -> Void
 
-    @Environment(\.colorScheme) var colorScheme
+    let isDarkTheme: Bool
 
     func makeNSView(context: Context) -> CompactDraggableTabContainerView {
         let container = CompactDraggableTabContainerView()
-        // Initialize with correct color scheme
-        container.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, colorScheme: colorScheme)
+        // Initialize with correct theme
+        container.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme)
         
         container.configure(
             tab: tab,
@@ -57,7 +57,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: CompactDraggableTabContainerView, context: Context) {
-        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, colorScheme: colorScheme)
+        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme)
     }
 }
 
@@ -375,7 +375,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         updateUI()
     }
 
-    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, colorScheme: ColorScheme? = nil) {
+    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, isDarkTheme: Bool = false) {
         self.tabId = tab.id
         self.tabTitle = tab.title
         self.tabURL = tab.url
@@ -387,9 +387,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         if let input = inputURL {
             self.inputURL = input
         }
-        if let scheme = colorScheme {
-            self.currentColorScheme = scheme
-        }
+        self.isDarkTheme = isDarkTheme
 
         // Reset editing state when tab properties or active state changes externally
         if !isActive {
@@ -399,14 +397,15 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         updateUI()
     }
 
-    private var currentColorScheme: ColorScheme = .light
+    private var isDarkTheme: Bool = false
 
     private func updateUI() {
-        // Explicitly use the appearance matching the SwiftUI environment
-        let appearanceName: NSAppearance.Name = currentColorScheme == .dark ? .darkAqua : .aqua
-        let appearance = NSAppearance(named: appearanceName)
+        // Force the appearance on the view itself
+        self.appearance = NSAppearance(named: isDarkTheme ? .darkAqua : .aqua)
         
-        appearance?.performAsCurrentDrawingAppearance { [self] in
+        // Resolve colors - now that self.appearance is set, named colors should resolve correctly
+        // We still use performAsCurrentDrawingAppearance just to be safe for CALayer changes
+        self.appearance?.performAsCurrentDrawingAppearance { [self] in
             // Update separator color (always, even without tab)
             separatorView?.layer?.backgroundColor = NSColor(named: "Border")?.cgColor
 
