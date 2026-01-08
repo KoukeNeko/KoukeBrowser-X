@@ -39,7 +39,36 @@ struct WebViewContainer: NSViewRepresentable {
             }
         }
 
+        // WebAuthn / Passkey Polyfill
+        // Intercepts navigator.credentials.create and get to send to native app
+        let webAuthnPolyfill = """
+        if (!navigator.credentials) { navigator.credentials = {}; }
+        
+        navigator.credentials.create = async function(options) {
+            console.log("WebAuthn: create called", options);
+            // TODO: Serialize options (ArrayBuffers to Base64)
+            // return window.webkit.messageHandlers.webAuthnCreate.postMessage(JSON.stringify(options));
+            return Promise.reject("WebAuthn not fully implemented in bridge");
+        };
+
+        navigator.credentials.get = async function(options) {
+            console.log("WebAuthn: get called", options);
+            // TODO: Serialize options
+            // return window.webkit.messageHandlers.webAuthnGet.postMessage(JSON.stringify(options));
+             return Promise.reject("WebAuthn not fully implemented in bridge");
+        };
+        """
+        let webAuthnScript = WKUserScript(source: webAuthnPolyfill, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        configuration.userContentController.addUserScript(webAuthnScript)
+
+
+
+        // Register message handlers
+        configuration.userContentController.add(context.coordinator, name: "webAuthnCreate")
+        configuration.userContentController.add(context.coordinator, name: "webAuthnGet")
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        context.coordinator.webView = webView // Assign webView to coordinator
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
@@ -73,12 +102,14 @@ struct WebViewContainer: NSViewRepresentable {
         Coordinator(self)
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: WebViewContainer
         private var titleObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
         private var canGoBackObservation: NSKeyValueObservation?
         private var canGoForwardObservation: NSKeyValueObservation?
+        private let webAuthnManager = WebAuthnManager()
+        weak var webView: WKWebView? // Weak reference to webView
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
@@ -170,7 +201,6 @@ struct WebViewContainer: NSViewRepresentable {
 
         // MARK: - WKUIDelegate
 
-        // Handle target="_blank" links - open in new tab
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             if let url = navigationAction.request.url?.absoluteString {
                 Task { @MainActor in
@@ -178,6 +208,22 @@ struct WebViewContainer: NSViewRepresentable {
                 }
             }
             return nil
+        }
+
+        // MARK: - WKScriptMessageHandler
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let jsonString = message.body as? String, let webView = webView, let window = webView.window else { return }
+            
+            if message.name == "webAuthnCreate" {
+                webAuthnManager.performRegistration(jsonRequest: jsonString, in: window) { result, error in
+                    // Return result to JS (TODO: invoke JS callback)
+                }
+            } else if message.name == "webAuthnGet" {
+                webAuthnManager.performAssertion(jsonRequest: jsonString, in: window) { result, error in
+                    // Return result to JS
+                }
+            }
         }
     }
 }
