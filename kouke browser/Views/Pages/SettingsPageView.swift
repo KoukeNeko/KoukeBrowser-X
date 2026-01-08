@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Settings Page View
 
 struct SettingsPageView: View {
-    @StateObject private var settings = BrowserSettings.shared
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var selectedSection: SettingsSidebarSection = .general
 
     var body: some View {
@@ -79,7 +79,7 @@ struct SettingsPageView: View {
             case .privacy:
                 PrivacySettingsContent(settings: settings)
             case .advanced:
-                AdvancedSettingsContent()
+                AdvancedSettingsContent(settings: settings)
             }
 
             Spacer()
@@ -209,20 +209,20 @@ private struct GeneralSettingsContent: View {
             // Downloads
             SettingsCard(title: "Downloads") {
                 SettingsPageRow(label: "Save files to:") {
-                    Picker("", selection: .constant("Downloads")) {
-                        Text("Downloads").tag("Downloads")
-                        Text("Ask for each file").tag("Ask")
+                    Picker("", selection: $settings.downloadLocation) {
+                        ForEach(DownloadLocation.allCases, id: \.rawValue) { location in
+                            Text(location.displayName).tag(location)
+                        }
                     }
                     .labelsHidden()
                     .frame(width: 200)
                 }
 
                 SettingsPageRow(label: "Remove items:") {
-                    Picker("", selection: .constant("After one day")) {
-                        Text("After one day").tag("After one day")
-                        Text("When Kouke quits").tag("Quit")
-                        Text("Upon successful download").tag("Success")
-                        Text("Manually").tag("Manually")
+                    Picker("", selection: $settings.removeDownloadItems) {
+                        ForEach(RemoveDownloadItems.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
                     }
                     .labelsHidden()
                     .frame(width: 200)
@@ -271,21 +271,21 @@ private struct TabsSettingsContent: View {
 
             SettingsCard(title: "Tab Behavior") {
                 SettingsPageRow(label: "Open pages in tabs:") {
-                    Picker("", selection: .constant("Automatically")) {
-                        Text("Never").tag("Never")
-                        Text("Automatically").tag("Automatically")
-                        Text("Always").tag("Always")
+                    Picker("", selection: $settings.openPagesInTabs) {
+                        ForEach(OpenPagesInTabs.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
                     }
                     .labelsHidden()
                     .frame(width: 160)
                 }
 
                 SettingsPageRow(label: "") {
-                    Toggle("Open links in background", isOn: .constant(false))
+                    Toggle("Open links in background", isOn: $settings.openLinksInBackground)
                 }
 
                 SettingsPageRow(label: "") {
-                    Toggle("⌘-Click opens in new tab", isOn: .constant(true))
+                    Toggle("⌘-Click opens in new tab", isOn: $settings.commandClickOpensNewTab)
                 }
             }
         }
@@ -313,11 +313,11 @@ private struct SearchSettingsContent: View {
 
             SettingsCard(title: "Search Suggestions") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Include search engine suggestions", isOn: .constant(true))
-                    Toggle("Include Kouke suggestions", isOn: .constant(true))
-                    Toggle("Enable Quick Website Search", isOn: .constant(true))
-                    Toggle("Preload Top Hit in background", isOn: .constant(true))
-                    Toggle("Show Favorites", isOn: .constant(true))
+                    Toggle("Include search engine suggestions", isOn: $settings.includeSearchSuggestions)
+                    Toggle("Include Kouke suggestions", isOn: $settings.includeKoukeSuggestions)
+                    Toggle("Enable Quick Website Search", isOn: $settings.enableQuickWebsiteSearch)
+                    Toggle("Preload Top Hit in background", isOn: $settings.preloadTopHit)
+                    Toggle("Show Favorites", isOn: $settings.showFavoritesInSearch)
                 }
                 .font(.system(size: 13))
             }
@@ -335,22 +335,23 @@ private struct PrivacySettingsContent: View {
         VStack(alignment: .leading, spacing: 24) {
             SettingsCard(title: "Tracking") {
                 SettingsPageRow(label: "") {
-                    Toggle("Prevent cross-site tracking", isOn: .constant(true))
+                    Toggle("Prevent cross-site tracking", isOn: $settings.preventCrossSiteTracking)
                 }
 
                 SettingsPageRow(label: "") {
-                    Toggle("Hide IP address from trackers", isOn: .constant(false))
+                    Toggle("Hide IP address from trackers", isOn: $settings.hideIPFromTrackers)
                 }
             }
 
             SettingsCard(title: "Cookies & Data") {
                 SettingsPageRow(label: "") {
-                    Toggle("Block all cookies", isOn: .constant(false))
+                    Toggle("Block all cookies", isOn: $settings.blockAllCookies)
                 }
 
                 HStack(spacing: 12) {
                     Button("Manage Website Data...") {
-                        // Action
+                        // Open system preferences for website data
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_WebsiteData")!)
                     }
 
                     Button("Clear History...") {
@@ -363,6 +364,7 @@ private struct PrivacySettingsContent: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Clear", role: .destructive) {
                     settings.clearBrowsingData()
+                    HistoryManager.shared.clearHistory()
                 }
             } message: {
                 Text("This will clear all browsing history, cookies, and cached data.")
@@ -374,23 +376,37 @@ private struct PrivacySettingsContent: View {
 // MARK: - Advanced Settings Content
 
 private struct AdvancedSettingsContent: View {
+    @ObservedObject var settings: BrowserSettings
+
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             SettingsCard(title: "Address Bar") {
                 SettingsPageRow(label: "") {
-                    Toggle("Show full website address", isOn: .constant(false))
+                    Toggle("Show full website address", isOn: $settings.showFullWebsiteAddress)
                 }
             }
 
             SettingsCard(title: "Accessibility") {
                 SettingsPageRow(label: "") {
-                    Toggle("Never use font sizes smaller than 9", isOn: .constant(false))
+                    HStack {
+                        Toggle("Never use font sizes smaller than", isOn: $settings.useMinimumFontSize)
+
+                        if settings.useMinimumFontSize {
+                            Picker("", selection: $settings.minimumFontSize) {
+                                ForEach([9, 10, 11, 12, 14, 16, 18], id: \.self) { size in
+                                    Text("\(size)").tag(size)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 60)
+                        }
+                    }
                 }
             }
 
             SettingsCard(title: "Developer") {
                 SettingsPageRow(label: "") {
-                    Toggle("Show Develop menu in menu bar", isOn: .constant(true))
+                    Toggle("Show Develop menu in menu bar", isOn: $settings.showDeveloperMenu)
                 }
             }
         }

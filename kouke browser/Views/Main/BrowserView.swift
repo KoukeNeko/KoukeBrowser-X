@@ -12,13 +12,20 @@ import WebKit
 struct BrowserView: View {
     @StateObject private var viewModel = BrowserViewModel()
     @ObservedObject private var settings = BrowserSettings.shared
+    @ObservedObject private var bookmarkManager = BookmarkManager.shared
     @State private var showTabOverview = false
     @State private var showHistory = false
+    @State private var showBookmarks = false
+    @State private var showBookmarkAllTabsAlert = false
+    @State private var currentZoomLevel: Double = 1.0
 
     var body: some View {
         mainContent
             .sheet(isPresented: $showHistory) {
                 historySheet
+            }
+            .sheet(isPresented: $showBookmarks) {
+                bookmarksSheet
             }
             .background(Color("Bg"))
             .ignoresSafeArea()
@@ -31,42 +38,19 @@ struct BrowserView: View {
                     NSApp.keyWindow?.title = title
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .showAllTabs)) { _ in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showTabOverview.toggle()
+            .modifier(FileMenuModifier(viewModel: viewModel))
+            .modifier(ViewMenuModifier(viewModel: viewModel, showTabOverview: $showTabOverview, currentZoomLevel: $currentZoomLevel))
+            .modifier(HistoryMenuModifier(viewModel: viewModel, showHistory: $showHistory))
+            .modifier(BookmarksMenuModifier(showBookmarks: $showBookmarks, showBookmarkAllTabsAlert: $showBookmarkAllTabsAlert))
+            .modifier(DeveloperMenuModifier(viewModel: viewModel, settings: settings))
+            .modifier(KoukeURLModifier(viewModel: viewModel))
+            .alert("Bookmark All Tabs", isPresented: $showBookmarkAllTabsAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Bookmark All") {
+                    bookmarkAllTabs()
                 }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .viewSource)) { _ in
-                viewModel.viewSource()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openDevTools)) { _ in
-                viewModel.openDevTools()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openConsole)) { _ in
-                handleOpenConsole()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleJavaScript)) { _ in
-                settings.toggleJavaScript()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleImages)) { _ in
-                settings.toggleImages()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .clearCache)) { _ in
-                settings.clearCache()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .clearCookies)) { _ in
-                settings.clearCookies()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .showHistory)) { _ in
-                showHistory = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .clearHistory)) { _ in
-                HistoryManager.shared.clearHistory()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openKoukeURL)) { notification in
-                if let urlString = notification.userInfo?["url"] as? String {
-                    viewModel.openKoukeURL(urlString)
-                }
+            } message: {
+                Text("This will bookmark all \(viewModel.tabs.count) open tabs.")
             }
     }
 
@@ -156,14 +140,39 @@ struct BrowserView: View {
         )
     }
 
-    // MARK: - Helper Methods
+    private var bookmarksSheet: some View {
+        BookmarksView(
+            onNavigate: { url in
+                viewModel.navigateFromStartPage(to: url)
+                showBookmarks = false
+            }
+        )
+        .frame(width: 400, height: 500)
+    }
+
+    // MARK: - Bookmark Methods
+
+    private func bookmarkAllTabs() {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+        let folderName = "Tabs - \(dateFormatter.string(from: Date()))"
+
+        bookmarkManager.addFolder(name: folderName, parentId: nil)
+
+        if let folder = bookmarkManager.folders.last {
+            for tab in viewModel.tabs {
+                if !tab.isSpecialPage {
+                    bookmarkManager.addBookmark(title: tab.title, url: tab.url, folderId: folder.id)
+                }
+            }
+        }
+    }
 
     // MARK: - Helper Methods
 
     private func configureWindow(_ window: NSWindow, viewModel: BrowserViewModel, settings: BrowserSettings) {
-        // Enforce the correct appearance on the window immediately
         updateWindowAppearance(window, theme: settings.theme)
-        
+
         window.isMovableByWindowBackground = true
         window.tabbingMode = .disallowed
         window.makeKeyAndOrderFront(nil)
@@ -179,6 +188,141 @@ struct BrowserView: View {
         window.appearance = NSAppearance(named: theme == .dark ? .darkAqua : .aqua)
         window.backgroundColor = NSColor(named: "TitleBarBg")
         window.invalidateShadow()
+    }
+}
+
+// MARK: - Menu Modifiers
+
+struct FileMenuModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .newWindow)) { _ in
+                WindowManager.shared.createNewWindow(with: nil, webView: nil, at: nil)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in
+                if let activeTabId = viewModel.activeTabId {
+                    viewModel.closeTab(activeTabId)
+                }
+            }
+    }
+}
+
+struct ViewMenuModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+    @Binding var showTabOverview: Bool
+    @Binding var currentZoomLevel: Double
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .reloadPage)) { _ in
+                viewModel.reload()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .forceReloadPage)) { _ in
+                viewModel.getActiveWebView()?.reloadFromOrigin()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in
+                handleZoomIn()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
+                handleZoomOut()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .resetZoom)) { _ in
+                handleResetZoom()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleFullScreen)) { _ in
+                NSApp.keyWindow?.toggleFullScreen(nil)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showAllTabs)) { _ in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showTabOverview.toggle()
+                }
+            }
+    }
+
+    private func handleZoomIn() {
+        guard let webView = viewModel.getActiveWebView() else { return }
+        currentZoomLevel = min(currentZoomLevel + 0.1, 3.0)
+        webView.pageZoom = currentZoomLevel
+    }
+
+    private func handleZoomOut() {
+        guard let webView = viewModel.getActiveWebView() else { return }
+        currentZoomLevel = max(currentZoomLevel - 0.1, 0.5)
+        webView.pageZoom = currentZoomLevel
+    }
+
+    private func handleResetZoom() {
+        guard let webView = viewModel.getActiveWebView() else { return }
+        currentZoomLevel = 1.0
+        webView.pageZoom = currentZoomLevel
+    }
+}
+
+struct HistoryMenuModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+    @Binding var showHistory: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .goBack)) { _ in
+                viewModel.goBack()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .goForward)) { _ in
+                viewModel.goForward()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showHistory)) { _ in
+                showHistory = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clearHistory)) { _ in
+                HistoryManager.shared.clearHistory()
+            }
+    }
+}
+
+struct BookmarksMenuModifier: ViewModifier {
+    @Binding var showBookmarks: Bool
+    @Binding var showBookmarkAllTabsAlert: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .showBookmarks)) { _ in
+                showBookmarks = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .bookmarkAllTabs)) { _ in
+                showBookmarkAllTabsAlert = true
+            }
+    }
+}
+
+struct DeveloperMenuModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+    let settings: BrowserSettings
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .viewSource)) { _ in
+                viewModel.viewSource()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openDevTools)) { _ in
+                viewModel.openDevTools()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openConsole)) { _ in
+                handleOpenConsole()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleJavaScript)) { _ in
+                settings.toggleJavaScript()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleImages)) { _ in
+                settings.toggleImages()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clearCache)) { _ in
+                settings.clearCache()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clearCookies)) { _ in
+                settings.clearCookies()
+            }
     }
 
     private func handleOpenConsole() {
@@ -198,10 +342,24 @@ struct BrowserView: View {
     }
 }
 
-// Helper to access NSWindow and observe changes
+struct KoukeURLModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .openKoukeURL)) { notification in
+                if let urlString = notification.userInfo?["url"] as? String {
+                    viewModel.openKoukeURL(urlString)
+                }
+            }
+    }
+}
+
+// MARK: - Window Accessor
+
 struct WindowAccessor: NSViewRepresentable {
     var callback: (NSWindow) -> Void
-    var theme: AppTheme // Add theme observation
+    var theme: AppTheme
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -214,7 +372,6 @@ struct WindowAccessor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        // When theme changes, re-run callback to update window
         DispatchQueue.main.async {
             if let window = nsView.window {
                 self.callback(window)
@@ -223,7 +380,8 @@ struct WindowAccessor: NSViewRepresentable {
     }
 }
 
-// Manages toolbar with overlay style and traffic light positioning
+// MARK: - Toolbar Manager
+
 class ToolbarTabBarManager: NSObject {
     static let shared = ToolbarTabBarManager()
 
@@ -234,36 +392,27 @@ class ToolbarTabBarManager: NSObject {
         let windowId = ObjectIdentifier(window)
         let currentStyle = settings.tabBarStyle
 
-        // Skip if already configured with the same style
         if configuredWindows[windowId] == currentStyle { return }
         configuredWindows[windowId] = currentStyle
 
-        // Remove old resize observer if exists
         if let observer = resizeObservers[windowId] {
             NotificationCenter.default.removeObserver(observer)
             resizeObservers.removeValue(forKey: windowId)
         }
 
-        // Enable full size content view - content extends under titlebar
         window.styleMask.insert(.fullSizeContentView)
-
-        // Make title bar transparent so our content shows through
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
 
-        // Always add toolbar - it controls traffic light positioning
         let toolbar = NSToolbar(identifier: "MainToolbar")
         window.toolbar = toolbar
 
         if #available(macOS 11.0, *) {
-            // unifiedCompact centers traffic lights in the toolbar area
             window.toolbarStyle = .unifiedCompact
         }
 
-        // Position traffic lights
         repositionTrafficLights(in: window, style: currentStyle)
 
-        // Listen for resize to maintain traffic light position
         let observer = NotificationCenter.default.addObserver(
             forName: NSWindow.didResizeNotification,
             object: window,
@@ -276,12 +425,7 @@ class ToolbarTabBarManager: NSObject {
     }
 
     private func repositionTrafficLights(in window: NSWindow, style: TabBarStyle) {
-        // Auto Layout prevents moving standard buttons - they snap back
-        // Instead, we just ensure the toolbar style is correct
-        // The actual "custom positioning" would require hiding system buttons
-        // and drawing custom ones, which is complex and loses native behavior
-
-        // For now, keep the standard behavior - the toolbar style should handle it
+        // Standard behavior - toolbar style handles positioning
     }
 }
 
