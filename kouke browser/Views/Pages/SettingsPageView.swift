@@ -144,7 +144,7 @@ private struct SidebarButton: View {
             .foregroundColor(isSelected ? Color("Text") : Color("TextMuted"))
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color("TabActive") : (isHovering ? Color("TabHover") : Color.clear))
+                    .fill(isSelected ? Color("TabActive") : (isHovering ? Color("TabInactive") : Color.clear))
             )
         }
         .buttonStyle(.plain)
