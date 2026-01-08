@@ -38,8 +38,27 @@ class BrowserViewModel: ObservableObject {
                 let title = extractHostname(from: url) ?? "New Tab"
                 tab = Tab(title: title, url: url, isLoading: !url.isEmpty && url != "kouke:blank")
             case .lastTabs:
-                // TODO: Implement session restore
-                tab = Tab(title: "New Tab", url: "kouke:blank")
+                if let session = SessionManager.shared.loadSession() {
+                    // Restore tabs from saved session
+                    let restoredTabs = session.tabs.map { savedTab in
+                        Tab(
+                            title: savedTab.title,
+                            url: savedTab.url,
+                            isLoading: !KoukeScheme.isKoukeURL(savedTab.url)
+                        )
+                    }
+
+                    if !restoredTabs.isEmpty {
+                        tabs = restoredTabs
+                        let activeIndex = min(session.activeTabIndex, restoredTabs.count - 1)
+                        activeTabId = restoredTabs[activeIndex].id
+                        inputURL = restoredTabs[activeIndex].url
+                        setupNotificationListeners()
+                        return
+                    }
+                }
+                // Fallback to start page if no session
+                tab = Tab(title: "New Tab", url: KoukeScheme.blank)
             }
         }
 
@@ -52,6 +71,10 @@ class BrowserViewModel: ObservableObject {
             webViews[tab.id] = webView
         }
 
+        setupNotificationListeners()
+    }
+
+    private func setupNotificationListeners() {
         // Listen for menu bar commands
         NotificationCenter.default.publisher(for: .newTab)
             .receive(on: DispatchQueue.main)
@@ -59,6 +82,12 @@ class BrowserViewModel: ObservableObject {
                 self?.addTab()
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Session Management
+
+    func saveSession() {
+        SessionManager.shared.saveSession(tabs: tabs, activeTabIndex: activeTabIndex)
     }
 
     // MARK: - Computed Properties

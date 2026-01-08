@@ -11,6 +11,13 @@ import SwiftUI
 struct kouke_browserApp: App {
     @StateObject private var viewModel = BrowserViewModel()
 
+    init() {
+        // Initialize WindowManager early to set up termination observer
+        Task { @MainActor in
+            WindowManager.shared.initialize()
+        }
+    }
+
     var body: some Scene {
         // Main browser window
         WindowGroup {

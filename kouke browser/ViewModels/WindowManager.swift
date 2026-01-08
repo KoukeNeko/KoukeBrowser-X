@@ -17,7 +17,51 @@ class WindowManager {
     private var windowViewModels: [Int: BrowserViewModel] = [:]  // windowNumber -> viewModel
     private var windows: [NSWindow] = []
 
-    private init() {}
+    private init() {
+        // Listen for app termination to save session
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.saveAllSessions()
+            }
+        }
+    }
+
+    // MARK: - Session Management
+
+    /// Initialize the window manager (call at app startup)
+    func initialize() {
+        // This ensures the singleton is created and observers are set up
+    }
+
+    /// Save all window sessions (called on app termination)
+    func saveAllSessions() {
+        // Collect all tabs from all windows
+        var allTabs: [Tab] = []
+        var activeIndex = 0
+        var currentOffset = 0
+
+        for (_, viewModel) in windowViewModels {
+            allTabs.append(contentsOf: viewModel.tabs)
+            if let activeIdx = viewModel.activeTabIndex {
+                activeIndex = currentOffset + activeIdx
+            }
+            currentOffset += viewModel.tabs.count
+        }
+
+        // If no tabs collected, try to save from first window
+        if allTabs.isEmpty, let firstViewModel = windowViewModels.values.first {
+            allTabs = firstViewModel.tabs
+            activeIndex = firstViewModel.activeTabIndex ?? 0
+        }
+
+        if !allTabs.isEmpty {
+            SessionManager.shared.saveSession(tabs: allTabs, activeTabIndex: activeIndex)
+        }
+    }
 
     /// Register a view model for a window (called from BrowserView)
     func registerViewModel(_ viewModel: BrowserViewModel, for window: NSWindow) {
@@ -173,8 +217,11 @@ struct BrowserViewForWindow: View {
                 ZStack {
                     ForEach(viewModel.tabs) { tab in
                         Group {
-                            if tab.url == "kouke:blank" {
-                                StartPage(onNavigate: viewModel.navigateFromStartPage)
+                            if tab.isSpecialPage {
+                                KoukePageView(
+                                    url: tab.url,
+                                    onNavigate: viewModel.navigateFromStartPage
+                                )
                             } else {
                                 WebViewContainer(
                                     tabId: tab.id,
