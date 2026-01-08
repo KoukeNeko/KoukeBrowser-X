@@ -193,6 +193,17 @@ struct kouke_browserApp: App {
                 }
             }
 
+            // Replace About menu item to open kouke:about
+            CommandGroup(replacing: .appInfo) {
+                Button("About kouke browser") {
+                    NotificationCenter.default.post(
+                        name: .openKoukeURL,
+                        object: nil,
+                        userInfo: ["url": KoukeScheme.about]
+                    )
+                }
+            }
+
             // Replace default Settings command to open kouke:settings in new tab
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {

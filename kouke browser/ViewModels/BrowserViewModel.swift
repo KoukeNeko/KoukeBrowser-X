@@ -15,6 +15,7 @@ class BrowserViewModel: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
     @Published var inputURL: String = ""
+    @Published var readerArticle: ReaderArticle?
 
     // WebView instances managed separately
     private var webViews: [UUID: WKWebView] = [:]
@@ -605,6 +606,21 @@ class BrowserViewModel: ObservableObject {
     func updateTabSecurityInfo(_ securityInfo: SecurityInfo, for tabId: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
         tabs[index].securityInfo = securityInfo
+    }
+
+    func updateTabReaderModeAvailable(_ available: Bool, for tabId: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[index].readerModeAvailable = available
+    }
+
+    func toggleReaderMode(for tabId: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[index].isReaderMode.toggle()
+    }
+
+    func setReaderMode(_ enabled: Bool, for tabId: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[index].isReaderMode = enabled
     }
 
     #if os(macOS)

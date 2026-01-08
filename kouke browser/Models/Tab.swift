@@ -38,13 +38,15 @@ struct Tab: Identifiable, Equatable {
     var canGoBack: Bool
     var canGoForward: Bool
     var securityInfo: SecurityInfo?
+    var readerModeAvailable: Bool
+    var isReaderMode: Bool
     #if os(macOS)
     var thumbnail: NSImage?
     #else
     var thumbnail: UIImage?
     #endif
 
-    init(id: UUID = UUID(), title: String = "New Tab", url: String = "kouke:blank", isLoading: Bool = false, canGoBack: Bool = false, canGoForward: Bool = false, securityInfo: SecurityInfo? = nil) {
+    init(id: UUID = UUID(), title: String = "New Tab", url: String = "kouke:blank", isLoading: Bool = false, canGoBack: Bool = false, canGoForward: Bool = false, securityInfo: SecurityInfo? = nil, readerModeAvailable: Bool = false, isReaderMode: Bool = false) {
         self.id = id
         self.title = title
         self.url = url
@@ -52,6 +54,8 @@ struct Tab: Identifiable, Equatable {
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
         self.securityInfo = securityInfo
+        self.readerModeAvailable = readerModeAvailable
+        self.isReaderMode = isReaderMode
         self.thumbnail = nil
     }
 
@@ -62,7 +66,9 @@ struct Tab: Identifiable, Equatable {
         lhs.isLoading == rhs.isLoading &&
         lhs.canGoBack == rhs.canGoBack &&
         lhs.canGoForward == rhs.canGoForward &&
-        lhs.securityInfo == rhs.securityInfo
+        lhs.securityInfo == rhs.securityInfo &&
+        lhs.readerModeAvailable == rhs.readerModeAvailable &&
+        lhs.isReaderMode == rhs.isReaderMode
         // Intentionally not comparing thumbnail for performance
     }
 

@@ -120,6 +120,15 @@ struct BrowserView: View {
                             url: tab.url,
                             onNavigate: viewModel.navigateFromStartPage
                         )
+                    } else if tab.isReaderMode, let article = viewModel.readerArticle, tab.id == viewModel.activeTabId {
+                        ReaderModeView(
+                            article: article,
+                            originalURL: tab.url,
+                            onClose: {
+                                viewModel.setReaderMode(false, for: tab.id)
+                                viewModel.readerArticle = nil
+                            }
+                        )
                     } else {
                         WebViewContainer(
                             tabId: tab.id,
