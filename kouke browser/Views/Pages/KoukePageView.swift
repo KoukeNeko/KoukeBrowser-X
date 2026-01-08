@@ -22,6 +22,9 @@ struct KoukePageView: View {
         case KoukeScheme.settings:
             SettingsPageView()
 
+        case KoukeScheme.help:
+            HelpPageView()
+
         default:
             // Handle kouke:// URLs (like view-source) - let WebView handle them
             if url.hasPrefix("kouke://") {

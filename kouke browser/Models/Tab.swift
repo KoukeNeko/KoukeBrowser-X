@@ -20,6 +20,7 @@ enum KoukeScheme {
     static let blank = "kouke:blank"
     static let about = "kouke:about"
     static let settings = "kouke:settings"
+    static let help = "kouke:help"
 
     /// Check if a URL uses the kouke: scheme
     static func isKoukeURL(_ url: String) -> Bool {
@@ -64,7 +65,7 @@ struct Tab: Identifiable, Equatable {
         lhs.securityInfo == rhs.securityInfo
         // Intentionally not comparing thumbnail for performance
     }
-    
+
     /// Check if this tab is showing a special internal page
     var isSpecialPage: Bool {
         KoukeScheme.isKoukeURL(url) || url.hasPrefix("kouke://")
@@ -74,7 +75,7 @@ struct Tab: Identifiable, Equatable {
     var isKoukePage: Bool {
         url.hasPrefix("kouke://")
     }
-    
+
     /// Get favicon URL with apple-touch-icon priority
     var faviconURL: URL? {
         guard let urlObj = URL(string: url),
