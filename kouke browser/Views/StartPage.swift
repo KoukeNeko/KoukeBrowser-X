@@ -34,12 +34,14 @@ struct StartPage: View {
                 if !currentBookmarks.isEmpty || !currentFolders.isEmpty || currentFolderId != nil {
                     VStack(alignment: .leading, spacing: 16) {
                         // Header with back button when in folder
-                        HStack {
+                        HStack(spacing: 4) {
                             if currentFolderId != nil {
                                 Button(action: goBack) {
                                     Image(systemName: "chevron.left")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(Color("TextMuted"))
+                                        .frame(width: 24, height: 24)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -50,6 +52,7 @@ struct StartPage: View {
                                 .textCase(.uppercase)
                                 .kerning(0.5)
                         }
+                        .frame(height: 24) // Fixed height for consistency
 
                         // Grid of folders and bookmarks
                         LazyVGrid(columns: [
@@ -118,6 +121,7 @@ struct FolderButton: View {
     let folder: BookmarkFolder
     let bookmarkManager: BookmarkManager
     let action: () -> Void
+    @ObservedObject private var faviconService = FaviconService.shared
 
     @State private var isHovering = false
 
@@ -145,6 +149,7 @@ struct FolderButton: View {
                     }
                 }
                 .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .scaleEffect(isHovering ? 1.02 : 1.0)
                 .animation(.easeInOut(duration: 0.1), value: isHovering)
 
@@ -167,6 +172,7 @@ struct FolderButton: View {
 
 struct FaviconCollage: View {
     let bookmarks: [Bookmark]
+    @ObservedObject private var faviconService = FaviconService.shared
 
     private var gridSize: Int {
         // Determine grid size based on bookmark count
@@ -186,6 +192,7 @@ struct FaviconCollage: View {
         ) {
             ForEach(0..<(gridSize * gridSize), id: \.self) { index in
                 if index < bookmarks.count {
+                    // Use a key to force refresh when URL changes in cache
                     AsyncImage(url: bookmarks[index].faviconURL) { phase in
                         switch phase {
                         case .success(let image):
@@ -195,9 +202,16 @@ struct FaviconCollage: View {
                                 .frame(width: cellSize, height: cellSize)
                                 .clipped()
                         case .failure:
-                            Rectangle()
-                                .fill(Color("TabInactive"))
-                                .frame(width: cellSize, height: cellSize)
+                             if gridSize == 1 {
+                                 Image(systemName: "globe")
+                                     .font(.system(size: 24))
+                                     .foregroundColor(Color("TextMuted"))
+                                     .frame(width: cellSize, height: cellSize)
+                             } else {
+                                Rectangle()
+                                    .fill(Color("TabInactive"))
+                                    .frame(width: cellSize, height: cellSize)
+                             }
                         case .empty:
                             Rectangle()
                                 .fill(Color("TabInactive"))
@@ -208,6 +222,7 @@ struct FaviconCollage: View {
                                 .frame(width: cellSize, height: cellSize)
                         }
                     }
+                    .id(bookmarks[index].faviconURL) // Force refresh when URL changes
                 } else {
                     Rectangle()
                         .fill(Color("TabInactive"))
@@ -224,6 +239,7 @@ struct FaviconCollage: View {
 struct BookmarkButton: View {
     let bookmark: Bookmark
     let action: () -> Void
+    @ObservedObject private var faviconService = FaviconService.shared
 
     @State private var isHovering = false
 
@@ -257,8 +273,10 @@ struct BookmarkButton: View {
                                 .foregroundColor(Color("TextMuted"))
                         }
                     }
+                    .id(bookmark.faviconURL) // Force refresh when URL changes
                 }
                 .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .scaleEffect(isHovering ? 1.02 : 1.0)
                 .animation(.easeInOut(duration: 0.1), value: isHovering)
 
