@@ -204,6 +204,18 @@ struct kouke_browserApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+
+            // Help menu
+            CommandGroup(replacing: .help) {
+                Button("kouke browser Help") {
+                    NotificationCenter.default.post(
+                        name: .openKoukeURL,
+                        object: nil,
+                        userInfo: ["url": KoukeScheme.help]
+                    )
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
         }
         #endif
     }
