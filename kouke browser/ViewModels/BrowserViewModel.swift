@@ -418,16 +418,62 @@ class BrowserViewModel: ObservableObject {
                             <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
                             <script>
                                 const toggle = document.getElementById('line-wrap-toggle');
+                                const preEl = document.getElementById('code-pre');
                                 const codeEl = document.querySelector('code');
+                                
+                                // Sync line number heights with wrapped content
+                                function syncLineNumbers() {
+                                    const lineNumberRows = preEl.querySelector('.line-numbers-rows');
+                                    if (!lineNumberRows) return;
+                                    
+                                    const spans = lineNumberRows.querySelectorAll('span');
+                                    const lines = codeEl.innerHTML.split('\\n');
+                                    const lineHeight = parseFloat(getComputedStyle(codeEl).lineHeight);
+                                    const isWrapping = toggle.checked;
+                                    
+                                    // Create a measurement div
+                                    const measure = document.createElement('div');
+                                    measure.style.cssText = 'position:absolute;visibility:hidden;white-space:' + 
+                                        (isWrapping ? 'pre-wrap' : 'pre') + ';word-wrap:break-word;overflow-wrap:break-word;' +
+                                        'font:' + getComputedStyle(codeEl).font + ';width:' + codeEl.clientWidth + 'px;';
+                                    document.body.appendChild(measure);
+                                    
+                                    spans.forEach((span, i) => {
+                                        if (isWrapping && i < lines.length) {
+                                            measure.innerHTML = lines[i] || '&nbsp;';
+                                            const height = Math.max(measure.offsetHeight, lineHeight);
+                                            span.style.height = height + 'px';
+                                        } else {
+                                            span.style.height = '';
+                                        }
+                                    });
+                                    
+                                    measure.remove();
+                                }
                                 
                                 toggle.addEventListener('change', (e) => {
                                     if (e.target.checked) {
+                                        preEl.style.whiteSpace = 'pre-wrap';
+                                        preEl.style.wordWrap = 'break-word';
+                                        preEl.style.overflowWrap = 'break-word';
                                         codeEl.style.whiteSpace = 'pre-wrap';
-                                        codeEl.style.wordBreak = 'break-all';
+                                        codeEl.style.wordWrap = 'break-word';
+                                        codeEl.style.overflowWrap = 'break-word';
                                     } else {
+                                        preEl.style.whiteSpace = 'pre';
+                                        preEl.style.wordWrap = 'normal';
+                                        preEl.style.overflowWrap = 'normal';
                                         codeEl.style.whiteSpace = 'pre';
-                                        codeEl.style.wordBreak = 'normal';
+                                        codeEl.style.wordWrap = 'normal';
+                                        codeEl.style.overflowWrap = 'normal';
                                     }
+                                    // Recalculate line heights after DOM update
+                                    requestAnimationFrame(syncLineNumbers);
+                                });
+                                
+                                // Recalculate on window resize
+                                window.addEventListener('resize', () => {
+                                    if (toggle.checked) requestAnimationFrame(syncLineNumbers);
                                 });
                             </script>
                         </body>
