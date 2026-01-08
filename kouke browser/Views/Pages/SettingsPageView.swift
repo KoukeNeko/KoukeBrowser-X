@@ -288,6 +288,17 @@ private struct AppearanceSettingsContent: View {
                 SettingsPageRow(label: "") {
                     Toggle("Show Add to Favorites button", isOn: $settings.showAddToFavoritesButton)
                 }
+
+                Divider().padding(.vertical, 4)
+
+                SettingsPageRow(label: "") {
+                    Toggle("Always open in separate window from menu/shortcuts", isOn: $settings.alwaysUseSheetForMenuShortcuts)
+                }
+
+                Text("When toolbar buttons are visible, clicking them shows a popover. Enable this option to always open a separate window when using menu items or keyboard shortcuts instead.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.top, 4)
             }
         }
     }

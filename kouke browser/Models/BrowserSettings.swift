@@ -330,6 +330,10 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(showAddToFavoritesButton, forKey: "showAddToFavoritesButton") }
     }
 
+    @Published var alwaysUseSheetForMenuShortcuts: Bool {
+        didSet { defaults.set(alwaysUseSheetForMenuShortcuts, forKey: "alwaysUseSheetForMenuShortcuts") }
+    }
+
     // Advanced settings
     @Published var showFullWebsiteAddress: Bool {
         didSet { defaults.set(showFullWebsiteAddress, forKey: "showFullWebsiteAddress") }
@@ -492,6 +496,7 @@ class BrowserSettings: ObservableObject {
         showDownloadsButton = defaults.bool(forKey: "showDownloadsButton")
         showBookmarksButton = defaults.bool(forKey: "showBookmarksButton")
         showAddToFavoritesButton = defaults.bool(forKey: "showAddToFavoritesButton")
+        alwaysUseSheetForMenuShortcuts = defaults.bool(forKey: "alwaysUseSheetForMenuShortcuts")
 
         // Advanced settings
         showFullWebsiteAddress = defaults.bool(forKey: "showFullWebsiteAddress")
