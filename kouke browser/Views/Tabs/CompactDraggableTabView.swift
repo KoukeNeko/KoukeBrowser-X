@@ -127,11 +127,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         return NSSize(width: NSView.noIntrinsicMetric, height: 32)
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        // Re-apply colors when appearance (light/dark mode) changes
-        updateUI()
-    }
+
 
     private func setupView() {
         wantsLayer = true
@@ -633,29 +629,34 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         let size = NSSize(width: 140, height: 28)
         let image = NSImage(size: size)
 
+        let appearanceName: NSAppearance.Name = isDarkTheme ? .darkAqua : .aqua
+        let appearance = NSAppearance(named: appearanceName)
+        
         image.lockFocus()
 
-        (NSColor(named: "TabActive") ?? .windowBackgroundColor).withAlphaComponent(0.9).setFill()
-        let path = NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 6, yRadius: 6)
-        path.fill()
+        appearance?.performAsCurrentDrawingAppearance {
+            (NSColor(named: "TabActive") ?? .windowBackgroundColor).withAlphaComponent(0.9).setFill()
+            let path = NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 6, yRadius: 6)
+            path.fill()
 
-        (NSColor(named: "Border") ?? .separatorColor).setStroke()
-        path.lineWidth = 1
-        path.stroke()
+            (NSColor(named: "Border") ?? .separatorColor).setStroke()
+            path.lineWidth = 1
+            path.stroke()
 
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .left
-        paragraphStyle.lineBreakMode = .byTruncatingTail
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.alignment = .left
+            paragraphStyle.lineBreakMode = .byTruncatingTail
 
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 11),
-            .foregroundColor: NSColor(named: "Text") ?? .labelColor,
-            .paragraphStyle: paragraphStyle
-        ]
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor(named: "Text") ?? .labelColor,
+                .paragraphStyle: paragraphStyle
+            ]
 
-        let titleRect = NSRect(x: 24, y: (size.height - 14) / 2, width: size.width - 36, height: 14)
-        tabTitle.draw(in: titleRect, withAttributes: attributes)
-
+            let titleRect = NSRect(x: 24, y: (size.height - 14) / 2, width: size.width - 36, height: 14)
+            tabTitle.draw(in: titleRect, withAttributes: attributes)
+        }
+        
         image.unlockFocus()
 
         return image
