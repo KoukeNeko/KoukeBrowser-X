@@ -51,7 +51,6 @@ struct WebViewContainer: NSViewRepresentable {
 
         // Apply JavaScript setting
         configuration.defaultWebpagePreferences.allowsContentJavaScript = !settings.disableJavaScript
-        configuration.defaultWebpagePreferences.preferredContentMode = .desktop
 
         // Apply image blocking if enabled
         if settings.disableImages {
@@ -74,33 +73,8 @@ struct WebViewContainer: NSViewRepresentable {
         // Note: Font size is now controlled via pageZoom instead of CSS injection
         // CSS injection of html font-size breaks sites that use rem units
 
-        // WebAuthn / Passkey Polyfill
-        // Intercepts navigator.credentials.create and get to send to native app
-        let webAuthnPolyfill = """
-        if (!navigator.credentials) { navigator.credentials = {}; }
-
-        navigator.credentials.create = async function(options) {
-            console.log("WebAuthn: create called", options);
-            // TODO: Serialize options (ArrayBuffers to Base64)
-            // return window.webkit.messageHandlers.webAuthnCreate.postMessage(JSON.stringify(options));
-            return Promise.reject("WebAuthn not fully implemented in bridge");
-        };
-
-        navigator.credentials.get = async function(options) {
-            console.log("WebAuthn: get called", options);
-            // TODO: Serialize options
-            // return window.webkit.messageHandlers.webAuthnGet.postMessage(JSON.stringify(options));
-             return Promise.reject("WebAuthn not fully implemented in bridge");
-        };
-        """
-        let webAuthnScript = WKUserScript(source: webAuthnPolyfill, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        configuration.userContentController.addUserScript(webAuthnScript)
-
-
-
-        // Register message handlers
-        configuration.userContentController.add(context.coordinator, name: "webAuthnCreate")
-        configuration.userContentController.add(context.coordinator, name: "webAuthnGet")
+        // Note: WebAuthn polyfill removed - it was overriding navigator.credentials
+        // and causing compatibility issues with sites like Google
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         context.coordinator.webView = webView // Assign webView to coordinator
@@ -111,8 +85,8 @@ struct WebViewContainer: NSViewRepresentable {
         // Enable developer extras for Web Inspector
         webView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
 
-        // Set User-Agent on macOS (more authentic for WebKit)
-        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Kouke/2026.01"
+        // Set User-Agent to mimic Safari on macOS for best compatibility
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15"
 
         // Register with ViewModel
         Task { @MainActor in
@@ -138,14 +112,13 @@ struct WebViewContainer: NSViewRepresentable {
         Coordinator(self)
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: WebViewContainer
         private var titleObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
         private var canGoBackObservation: NSKeyValueObservation?
         private var canGoForwardObservation: NSKeyValueObservation?
 
-        private let webAuthnManager = WebAuthnManager()
         weak var webView: WKWebView?
         private var pendingNavigationHost: String?
         private var hasCapturedCertificate = false
@@ -524,22 +497,6 @@ struct WebViewContainer: NSViewRepresentable {
                 }
             }
             return nil
-        }
-
-        // MARK: - WKScriptMessageHandler
-
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let jsonString = message.body as? String, let webView = webView, let window = webView.window else { return }
-
-            if message.name == "webAuthnCreate" {
-                webAuthnManager.performRegistration(jsonRequest: jsonString, in: window) { result, error in
-                    // Return result to JS (TODO: invoke JS callback)
-                }
-            } else if message.name == "webAuthnGet" {
-                webAuthnManager.performAssertion(jsonRequest: jsonString, in: window) { result, error in
-                    // Return result to JS
-                }
-            }
         }
     }
 }
