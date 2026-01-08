@@ -39,6 +39,18 @@ struct WebViewContainer: NSViewRepresentable {
             }
         }
 
+        // Apply default font size via CSS injection
+        let fontSizeCSS = """
+        (function() {
+            var style = document.createElement('style');
+            style.id = 'kouke-font-size';
+            style.textContent = 'html { font-size: \(settings.fontSize)px !important; }';
+            document.head.appendChild(style);
+        })();
+        """
+        let fontSizeScript = WKUserScript(source: fontSizeCSS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        configuration.userContentController.addUserScript(fontSizeScript)
+
         // WebAuthn / Passkey Polyfill
         // Intercepts navigator.credentials.create and get to send to native app
         let webAuthnPolyfill = """
@@ -108,11 +120,14 @@ struct WebViewContainer: NSViewRepresentable {
         private var urlObservation: NSKeyValueObservation?
         private var canGoBackObservation: NSKeyValueObservation?
         private var canGoForwardObservation: NSKeyValueObservation?
+        private var fontSizeObserver: NSObjectProtocol?
         private let webAuthnManager = WebAuthnManager()
-        weak var webView: WKWebView? // Weak reference to webView
+        weak var webView: WKWebView?
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
+            super.init()
+            setupFontSizeObserver()
         }
 
         deinit {
@@ -120,6 +135,34 @@ struct WebViewContainer: NSViewRepresentable {
             urlObservation?.invalidate()
             canGoBackObservation?.invalidate()
             canGoForwardObservation?.invalidate()
+            if let observer = fontSizeObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+
+        private func setupFontSizeObserver() {
+            fontSizeObserver = NotificationCenter.default.addObserver(
+                forName: .fontSizeChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self = self,
+                      let webView = self.webView,
+                      let fontSize = notification.object as? Int else { return }
+
+                let js = """
+                (function() {
+                    var style = document.getElementById('kouke-font-size');
+                    if (!style) {
+                        style = document.createElement('style');
+                        style.id = 'kouke-font-size';
+                        document.head.appendChild(style);
+                    }
+                    style.textContent = 'html { font-size: \(fontSize)px !important; }';
+                })();
+                """
+                webView.evaluateJavaScript(js, completionHandler: nil)
+            }
         }
 
         func setupObservers(for webView: WKWebView) {

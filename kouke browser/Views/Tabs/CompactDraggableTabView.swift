@@ -25,8 +25,13 @@ struct CompactDraggableTabView: NSViewRepresentable {
     let onInputURLChange: (String) -> Void
     let onNavigate: () -> Void
 
+    @Environment(\.colorScheme) var colorScheme
+
     func makeNSView(context: Context) -> CompactDraggableTabContainerView {
         let container = CompactDraggableTabContainerView()
+        // Initialize with correct color scheme
+        container.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, colorScheme: colorScheme)
+        
         container.configure(
             tab: tab,
             isActive: isActive,
@@ -52,7 +57,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: CompactDraggableTabContainerView, context: Context) {
-        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL)
+        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, colorScheme: colorScheme)
     }
 }
 
@@ -98,6 +103,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     private var closeButton: NSButton?
     private var loadingIndicator: NSProgressIndicator?
     private var backgroundView: NSView?
+    private var separatorView: NSView?
 
     // Constraints for dynamic width
     private var titleWidthConstraint: NSLayoutConstraint?
@@ -119,6 +125,12 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
 
     override var intrinsicContentSize: NSSize {
         return NSSize(width: NSView.noIntrinsicMetric, height: 32)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        // Re-apply colors when appearance (light/dark mode) changes
+        updateUI()
     }
 
     private func setupView() {
@@ -172,9 +184,9 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         // Separator line (right edge)
         let separator = NSView()
         separator.wantsLayer = true
-        separator.layer?.backgroundColor = NSColor(named: "Border")?.cgColor
         separator.translatesAutoresizingMaskIntoConstraints = false
         addSubview(separator)
+        separatorView = separator
 
         // Drop indicators
         let leftIndicator = NSView()
@@ -363,7 +375,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         updateUI()
     }
 
-    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil) {
+    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, colorScheme: ColorScheme? = nil) {
         self.tabId = tab.id
         self.tabTitle = tab.title
         self.tabURL = tab.url
@@ -375,6 +387,9 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         if let input = inputURL {
             self.inputURL = input
         }
+        if let scheme = colorScheme {
+            self.currentColorScheme = scheme
+        }
 
         // Reset editing state when tab properties or active state changes externally
         if !isActive {
@@ -384,21 +399,42 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         updateUI()
     }
 
-    private func updateUI() {
-        guard let tab = currentTab else { return }
+    private var currentColorScheme: ColorScheme = .light
 
-        // Background - only show active style if showActiveStyle is true
-        if isActive && showActiveStyle {
-            backgroundView?.layer?.backgroundColor = NSColor(named: "TabActive")?.cgColor
-        } else if isHovering && showActiveStyle {
-            backgroundView?.layer?.backgroundColor = NSColor(named: "TabInactive")?.cgColor
-        } else {
-            backgroundView?.layer?.backgroundColor = NSColor.clear.cgColor
+    private func updateUI() {
+        // Explicitly use the appearance matching the SwiftUI environment
+        let appearanceName: NSAppearance.Name = currentColorScheme == .dark ? .darkAqua : .aqua
+        let appearance = NSAppearance(named: appearanceName)
+        
+        appearance?.performAsCurrentDrawingAppearance { [self] in
+            // Update separator color (always, even without tab)
+            separatorView?.layer?.backgroundColor = NSColor(named: "Border")?.cgColor
+
+            // Background - only show active style if showActiveStyle is true
+            if isActive && showActiveStyle {
+                backgroundView?.layer?.backgroundColor = NSColor(named: "TabActive")?.cgColor
+            } else if isHovering && showActiveStyle {
+                backgroundView?.layer?.backgroundColor = NSColor(named: "TabInactive")?.cgColor
+            } else {
+                backgroundView?.layer?.backgroundColor = NSColor.clear.cgColor
+            }
+
+            // Title color
+            titleLabel?.textColor = isActive ? NSColor(named: "Text") : NSColor(named: "TextMuted")
+
+            // Close button tint
+            closeButton?.contentTintColor = NSColor(named: "TextMuted")?.withAlphaComponent(isHovering ? 1.0 : 0.4)
+
+            // Favicon tint for default icon
+            if currentTab?.faviconURL == nil {
+                faviconView?.contentTintColor = NSColor(named: "TextMuted")
+            }
         }
 
-        // Title
+        guard let tab = currentTab else { return }
+
+        // Title text
         titleLabel?.stringValue = tab.title
-        titleLabel?.textColor = isActive ? NSColor(named: "Text") : NSColor(named: "TextMuted")
 
         // Show/hide title based on state
         // Show title if:
@@ -441,13 +477,11 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
                 loadFavicon(from: faviconURL)
             } else {
                 faviconView?.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-                faviconView?.contentTintColor = NSColor(named: "TextMuted")
             }
         }
 
         // Close button - only show when hovering and can close
         closeButton?.isHidden = !(isHovering && canClose)
-        closeButton?.contentTintColor = NSColor(named: "TextMuted")?.withAlphaComponent(isHovering ? 1.0 : 0.4)
 
         invalidateIntrinsicContentSize()
     }

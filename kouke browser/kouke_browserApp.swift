@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct kouke_browserApp: App {
     @StateObject private var viewModel = BrowserViewModel()
+    @ObservedObject private var settings = BrowserSettings.shared
 
     init() {
         // Initialize WindowManager early to set up termination observer
@@ -22,7 +23,7 @@ struct kouke_browserApp: App {
         // Main browser window
         WindowGroup {
             ContentView()
-                .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
+                .preferredColorScheme(settings.theme.colorScheme)
                 .handlesExternalEvents(preferring: Set(arrayLiteral: "main"), allowing: Set(arrayLiteral: "*"))
                 .onOpenURL { url in
                     handleIncomingURL(url)

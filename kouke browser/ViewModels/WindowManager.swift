@@ -81,7 +81,6 @@ class WindowManager {
 
         // Create the browser view
         let browserView = BrowserViewForWindow(viewModel: viewModel)
-            .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
 
         // Create the window
         let window = NSWindow(
@@ -256,5 +255,6 @@ struct BrowserViewForWindow: View {
                 showTabOverview.toggle()
             }
         }
+        .preferredColorScheme(settings.theme.colorScheme)
     }
 }

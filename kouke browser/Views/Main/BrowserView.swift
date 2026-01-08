@@ -22,7 +22,7 @@ struct BrowserView: View {
             }
             .background(Color("Bg"))
             .ignoresSafeArea()
-            .preferredColorScheme(BrowserSettings.shared.theme.colorScheme)
+            .preferredColorScheme(settings.theme.colorScheme)
             .withhostingWindow { [viewModel, settings] window in
                 configureWindow(window, viewModel: viewModel, settings: settings)
             }
