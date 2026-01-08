@@ -64,12 +64,46 @@ struct GeneralSection: View {
                     .frame(width: 200)
                 }
 
-                if settings.startupBehavior == .customURL {
-                    SettingsRow(label: "Homepage:") {
-                        TextField("https://example.com", text: $settings.startupURL)
+                SettingsRow(label: "New windows open with:") {
+                    Picker("", selection: $settings.newWindowOpensWith) {
+                        ForEach(NewWindowOpensWith.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
+
+                SettingsRow(label: "New tabs open with:") {
+                    Picker("", selection: $settings.newTabOpensWith) {
+                        ForEach(NewTabOpensWith.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
+
+                SettingsRow(label: "Homepage:") {
+                    HStack {
+                        TextField("https://example.com", text: $settings.homepage)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 200)
+
+                        Button("Set to Current Page") {
+                            NotificationCenter.default.post(name: .setCurrentPageAsHomepage, object: nil)
+                        }
                     }
+                }
+
+                SettingsRow(label: "Remove history items:") {
+                    Picker("", selection: $settings.removeHistoryItems) {
+                        ForEach(RemoveHistoryItems.allCases, id: \.rawValue) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
                 }
             }
 
@@ -120,6 +154,10 @@ struct GeneralSection: View {
                     }
                     .labelsHidden()
                     .frame(width: 200)
+                }
+
+                SettingsRow(label: "") {
+                    Toggle("Open \"safe\" files after downloading", isOn: $settings.openSafeFilesAfterDownload)
                 }
             }
         }

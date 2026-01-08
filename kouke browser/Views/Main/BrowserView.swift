@@ -44,6 +44,7 @@ struct BrowserView: View {
             .modifier(BookmarksMenuModifier(showBookmarks: $showBookmarks, showBookmarkAllTabsAlert: $showBookmarkAllTabsAlert))
             .modifier(DeveloperMenuModifier(viewModel: viewModel, settings: settings))
             .modifier(KoukeURLModifier(viewModel: viewModel))
+            .modifier(SettingsModifier(viewModel: viewModel))
             .alert("Bookmark All Tabs", isPresented: $showBookmarkAllTabsAlert) {
                 Button("Cancel", role: .cancel) {}
                 Button("Bookmark All") {
@@ -350,6 +351,19 @@ struct KoukeURLModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .openKoukeURL)) { notification in
                 if let urlString = notification.userInfo?["url"] as? String {
                     viewModel.openKoukeURL(urlString)
+                }
+            }
+    }
+}
+
+struct SettingsModifier: ViewModifier {
+    let viewModel: BrowserViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .setCurrentPageAsHomepage)) { _ in
+                if let activeTab = viewModel.activeTab, !activeTab.isSpecialPage {
+                    BrowserSettings.shared.homepage = activeTab.url
                 }
             }
     }
