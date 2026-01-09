@@ -17,6 +17,12 @@ class BrowserViewModel: ObservableObject {
     @Published var inputURL: String = ""
     @Published var readerArticle: ReaderArticle?
 
+    // User Script installation state
+    @Published var pendingUserScriptURL: URL?
+    @Published var showUserScriptInstallSheet: Bool = false
+    @Published var pendingUserScriptContent: String?
+    @Published var pendingUserScriptMetadata: UserScriptManager.UserScriptMetadata?
+
     // WebView instances managed separately
     private var webViews: [UUID: WKWebView] = [:]
 
@@ -575,6 +581,57 @@ class BrowserViewModel: ObservableObject {
         guard let webView = getActiveWebView() else { return }
         // Use private API to show Web Inspector
         webView.perform(Selector(("_showInspector")))
+    }
+
+    // MARK: - User Script Installation
+
+    /// Prompt user to install a userscript from URL
+    func promptToInstallUserScript(from url: URL) {
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let content = String(data: data, encoding: .utf8) {
+                    await MainActor.run {
+                        let metadata = UserScriptManager.shared.parseUserScriptMetadata(from: content)
+                        self.pendingUserScriptURL = url
+                        self.pendingUserScriptContent = content
+                        self.pendingUserScriptMetadata = metadata
+                        self.showUserScriptInstallSheet = true
+                    }
+                }
+            } catch {
+                print("Kouke: Failed to fetch userscript from \(url): \(error)")
+            }
+        }
+    }
+
+    /// Install the pending userscript
+    func installPendingUserScript() {
+        guard let content = pendingUserScriptContent,
+              let url = pendingUserScriptURL else { return }
+
+        let metadata = pendingUserScriptMetadata ?? UserScriptManager.shared.parseUserScriptMetadata(from: content)
+        let name = metadata.name ?? url.deletingPathExtension().lastPathComponent
+
+        UserScriptManager.shared.addScript(
+            name: name,
+            source: content,
+            isEnabled: true,
+            injectionTime: metadata.runAt,
+            matchPatterns: metadata.match.isEmpty ? ["*://*/*"] : metadata.match,
+            excludePatterns: metadata.exclude,
+            runOnAllFrames: metadata.runOnAllFrames
+        )
+
+        clearPendingUserScript()
+    }
+
+    /// Clear all pending userscript state
+    func clearPendingUserScript() {
+        pendingUserScriptURL = nil
+        pendingUserScriptContent = nil
+        pendingUserScriptMetadata = nil
+        showUserScriptInstallSheet = false
     }
 
     // MARK: - Tab State Updates (called from WebView delegates)

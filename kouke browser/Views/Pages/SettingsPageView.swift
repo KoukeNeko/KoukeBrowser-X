@@ -576,6 +576,7 @@ private struct PrivacySettingsContent: View {
 
 private struct UserScriptsSettingsContent: View {
     @StateObject private var scriptManager = UserScriptManager.shared
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var showingAddScript = false
     @State private var editingScript: UserScript?
     @State private var showingImportPicker = false
@@ -584,6 +585,17 @@ private struct UserScriptsSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
+            SettingsCard(title: "Auto-Detection") {
+                SettingsPageRow(label: "") {
+                    Toggle("Prompt to install when opening .user.js URLs", isOn: $settings.promptToInstallUserScripts)
+                }
+
+                Text("When enabled, Kouke will detect userscript URLs and ask if you want to install them.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.top, 4)
+            }
+
             SettingsCard(title: "Scripts") {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("User scripts are custom JavaScript that run on web pages. They can modify page content, add features, or automate tasks.")

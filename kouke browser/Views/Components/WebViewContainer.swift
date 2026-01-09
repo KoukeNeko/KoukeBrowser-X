@@ -202,6 +202,19 @@ struct WebViewContainer: NSViewRepresentable {
         // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            // Check for userscript URL (.user.js files)
+            if let url = navigationAction.request.url,
+               navigationAction.targetFrame?.isMainFrame == true,
+               url.lastPathComponent.hasSuffix(".user.js"),
+               BrowserSettings.shared.promptToInstallUserScripts {
+                // Cancel navigation and prompt to install userscript
+                decisionHandler(.cancel)
+                Task { @MainActor in
+                    self.parent.viewModel.promptToInstallUserScript(from: url)
+                }
+                return
+            }
+
             // Only capture the target host for main frame navigations (not iframes)
             if navigationAction.targetFrame?.isMainFrame == true,
                let host = navigationAction.request.url?.host {

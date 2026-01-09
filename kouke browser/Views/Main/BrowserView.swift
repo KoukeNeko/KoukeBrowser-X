@@ -31,6 +31,9 @@ struct BrowserView: View {
             .sheet(isPresented: $showDownloads) {
                 downloadsSheet
             }
+            .sheet(isPresented: $viewModel.showUserScriptInstallSheet) {
+                UserScriptInstallSheet(viewModel: viewModel)
+            }
             .background(Color("Bg"))
             .ignoresSafeArea()
             .preferredColorScheme(settings.theme.colorScheme)
