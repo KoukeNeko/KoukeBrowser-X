@@ -81,6 +81,10 @@ struct SettingsPageView: View {
                 SearchSettingsContent(settings: settings)
             case .privacy:
                 PrivacySettingsContent(settings: settings)
+            case .userScripts:
+                UserScriptsSettingsContent()
+            case .experiments:
+                ExperimentsSettingsContent(settings: settings)
             case .advanced:
                 AdvancedSettingsContent(settings: settings)
             }
@@ -98,6 +102,8 @@ private enum SettingsSidebarSection: CaseIterable {
     case tabs
     case search
     case privacy
+    case userScripts
+    case experiments
     case advanced
 
     var title: String {
@@ -107,6 +113,8 @@ private enum SettingsSidebarSection: CaseIterable {
         case .tabs: return "Tabs"
         case .search: return "Search"
         case .privacy: return "Privacy"
+        case .userScripts: return "User Scripts"
+        case .experiments: return "Experiments"
         case .advanced: return "Advanced"
         }
     }
@@ -118,6 +126,8 @@ private enum SettingsSidebarSection: CaseIterable {
         case .tabs: return "square.on.square"
         case .search: return "magnifyingglass"
         case .privacy: return "hand.raised"
+        case .userScripts: return "doc.text.below.ecg"
+        case .experiments: return "flask"
         case .advanced: return "slider.horizontal.3"
         }
     }
@@ -301,9 +311,14 @@ private struct ToolbarButtonOrderList: View {
     @ObservedObject var settings: BrowserSettings
     @State private var draggingItem: ToolbarButton?
 
+    // Filter out Reader Mode - it's shown automatically based on page content
+    private var configurableButtons: [ToolbarButton] {
+        settings.toolbarButtonOrder.filter { $0 != .readerMode }
+    }
+
     var body: some View {
         VStack(spacing: 4) {
-            ForEach(settings.toolbarButtonOrder) { button in
+            ForEach(configurableButtons) { button in
                 ToolbarButtonRow(
                     button: button,
                     isEnabled: isButtonEnabled(button),
@@ -324,7 +339,7 @@ private struct ToolbarButtonOrderList: View {
 
     private func isButtonEnabled(_ button: ToolbarButton) -> Bool {
         switch button {
-        case .readerMode: return settings.showReaderModeButton
+        case .readerMode: return true // Always enabled when available
         case .addToFavorites: return settings.showAddToFavoritesButton
         case .downloads: return settings.showDownloadsButton
         case .bookmarks: return settings.showBookmarksButton
@@ -333,7 +348,7 @@ private struct ToolbarButtonOrderList: View {
 
     private func toggleButton(_ button: ToolbarButton) {
         switch button {
-        case .readerMode: settings.showReaderModeButton.toggle()
+        case .readerMode: break // Reader mode visibility is automatic
         case .addToFavorites: settings.showAddToFavoritesButton.toggle()
         case .downloads: settings.showDownloadsButton.toggle()
         case .bookmarks: settings.showBookmarksButton.toggle()
@@ -552,6 +567,450 @@ private struct PrivacySettingsContent: View {
                 }
             } message: {
                 Text("This will clear all browsing history, cookies, and cached data.")
+            }
+        }
+    }
+}
+
+// MARK: - User Scripts Settings Content
+
+private struct UserScriptsSettingsContent: View {
+    @StateObject private var scriptManager = UserScriptManager.shared
+    @State private var showingAddScript = false
+    @State private var editingScript: UserScript?
+    @State private var showingImportPicker = false
+    @State private var showingDeleteAlert = false
+    @State private var scriptToDelete: UserScript?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsCard(title: "Scripts") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("User scripts are custom JavaScript that run on web pages. They can modify page content, add features, or automate tasks.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+
+                    HStack(spacing: 12) {
+                        Button("Add Script") {
+                            showingAddScript = true
+                        }
+
+                        Button("Import...") {
+                            showingImportPicker = true
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+
+            if scriptManager.scripts.isEmpty {
+                SettingsCard(title: "No Scripts") {
+                    Text("You haven't added any user scripts yet. Click \"Add Script\" to create one, or \"Import\" to load a .js file.")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color("TextMuted"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                }
+            } else {
+                SettingsCard(title: "Installed Scripts (\(scriptManager.scripts.count))") {
+                    VStack(spacing: 8) {
+                        ForEach(scriptManager.scripts) { script in
+                            UserScriptRow(
+                                script: script,
+                                onToggle: { scriptManager.toggleScript(script.id) },
+                                onEdit: { editingScript = script },
+                                onDelete: {
+                                    scriptToDelete = script
+                                    showingDeleteAlert = true
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddScript) {
+            UserScriptEditorView(mode: .add)
+        }
+        .sheet(item: $editingScript) { script in
+            UserScriptEditorView(mode: .edit(script))
+        }
+        .fileImporter(
+            isPresented: $showingImportPicker,
+            allowedContentTypes: [.javaScript, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                _ = scriptManager.importScript(from: url)
+            }
+        }
+        .alert("Delete Script", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                if let script = scriptToDelete {
+                    scriptManager.removeScript(script.id)
+                }
+            }
+        } message: {
+            if let script = scriptToDelete {
+                Text("Are you sure you want to delete \"\(script.name)\"? This cannot be undone.")
+            }
+        }
+    }
+}
+
+// MARK: - User Script Row
+
+private struct UserScriptRow: View {
+    let script: UserScript
+    let onToggle: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Toggle("", isOn: Binding(
+                get: { script.isEnabled },
+                set: { _ in onToggle() }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(script.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(script.isEnabled ? Color("Text") : Color("TextMuted"))
+
+                Text(script.matchPatterns.joined(separator: ", "))
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if isHovering {
+                HStack(spacing: 8) {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(Color("TextMuted"))
+
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.red.opacity(0.8))
+                }
+            }
+
+            Text(script.injectionTime.displayName)
+                .font(.system(size: 10))
+                .foregroundColor(Color("TextMuted"))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color("TabInactive"))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? Color("TabInactive") : Color("Bg"))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color("Border"), lineWidth: 1)
+        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
+// MARK: - User Script Editor View
+
+private struct UserScriptEditorView: View {
+    enum Mode: Identifiable {
+        case add
+        case edit(UserScript)
+
+        var id: String {
+            switch self {
+            case .add: return "add"
+            case .edit(let script): return script.id.uuidString
+            }
+        }
+    }
+
+    let mode: Mode
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var scriptManager = UserScriptManager.shared
+
+    @State private var name: String = ""
+    @State private var source: String = ""
+    @State private var isEnabled: Bool = true
+    @State private var injectionTime: UserScriptInjectionTime = .documentEnd
+    @State private var matchPatternsText: String = "*://*/*"
+    @State private var excludePatternsText: String = ""
+    @State private var runOnAllFrames: Bool = false
+
+    private var isEditing: Bool {
+        if case .edit = mode { return true }
+        return false
+    }
+
+    private var existingScript: UserScript? {
+        if case .edit(let script) = mode { return script }
+        return nil
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text(isEditing ? "Edit Script" : "Add Script")
+                    .font(.system(size: 16, weight: .semibold))
+
+                Spacer()
+
+                Button("Cancel") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button(isEditing ? "Save" : "Add") {
+                    saveScript()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.isEmpty || source.isEmpty)
+            }
+            .padding(16)
+            .background(Color("CardBg"))
+
+            Divider()
+
+            // Content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Name
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Name")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+
+                        TextField("My Script", text: $name)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    // Match Patterns
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Match Patterns (one per line)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+
+                        TextEditor(text: $matchPatternsText)
+                            .font(.system(size: 12, design: .monospaced))
+                            .frame(height: 60)
+                            .padding(4)
+                            .background(Color("Bg"))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color("Border"), lineWidth: 1)
+                            )
+
+                        Text("Examples: *://*.example.com/*, https://github.com/*")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color("TextMuted"))
+                    }
+
+                    // Exclude Patterns
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Exclude Patterns (optional, one per line)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+
+                        TextEditor(text: $excludePatternsText)
+                            .font(.system(size: 12, design: .monospaced))
+                            .frame(height: 40)
+                            .padding(4)
+                            .background(Color("Bg"))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color("Border"), lineWidth: 1)
+                            )
+                    }
+
+                    // Options
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Run At")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("TextMuted"))
+
+                            Picker("", selection: $injectionTime) {
+                                ForEach(UserScriptInjectionTime.allCases, id: \.rawValue) { time in
+                                    Text(time.displayName).tag(time)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 140)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Options")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("TextMuted"))
+
+                            HStack {
+                                Toggle("Run on all frames", isOn: $runOnAllFrames)
+                                    .font(.system(size: 12))
+
+                                Toggle("Enabled", isOn: $isEnabled)
+                                    .font(.system(size: 12))
+                            }
+                        }
+                    }
+
+                    // Source Code
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("JavaScript Code")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color("TextMuted"))
+
+                        TextEditor(text: $source)
+                            .font(.system(size: 12, design: .monospaced))
+                            .frame(minHeight: 200)
+                            .padding(4)
+                            .background(Color("Bg"))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color("Border"), lineWidth: 1)
+                            )
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color("Bg"))
+        }
+        .frame(width: 600, height: 600)
+        .onAppear {
+            if let script = existingScript {
+                name = script.name
+                source = script.source
+                isEnabled = script.isEnabled
+                injectionTime = script.injectionTime
+                matchPatternsText = script.matchPatterns.joined(separator: "\n")
+                excludePatternsText = script.excludePatterns.joined(separator: "\n")
+                runOnAllFrames = script.runOnAllFrames
+            }
+        }
+    }
+
+    private func saveScript() {
+        let matchPatterns = matchPatternsText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        let excludePatterns = excludePatternsText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        if let existing = existingScript {
+            var updated = existing
+            updated.name = name
+            updated.source = source
+            updated.isEnabled = isEnabled
+            updated.injectionTime = injectionTime
+            updated.matchPatterns = matchPatterns.isEmpty ? ["*://*/*"] : matchPatterns
+            updated.excludePatterns = excludePatterns
+            updated.runOnAllFrames = runOnAllFrames
+            scriptManager.updateScript(updated)
+        } else {
+            scriptManager.addScript(
+                name: name,
+                source: source,
+                isEnabled: isEnabled,
+                injectionTime: injectionTime,
+                matchPatterns: matchPatterns.isEmpty ? ["*://*/*"] : matchPatterns,
+                excludePatterns: excludePatterns,
+                runOnAllFrames: runOnAllFrames
+            )
+        }
+    }
+}
+
+// MARK: - Experiments Settings Content
+
+private struct ExperimentsSettingsContent: View {
+    @ObservedObject var settings: BrowserSettings
+    @StateObject private var scriptManager = UserScriptManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsCard(title: "About Experiments") {
+                Text("These features are experimental and may not work as expected. They can be changed or removed at any time.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+            }
+
+            SettingsCard(title: "YouTube") {
+                SettingsPageRow(label: "") {
+                    Toggle("Show dislike count on YouTube videos", isOn: $settings.showYouTubeDislike)
+                }
+
+                Text("Uses the Return YouTube Dislike API to show dislike counts on YouTube videos. Data is estimated based on extension users and historical data.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.top, 4)
+
+                if settings.showYouTubeDislike, let script = scriptManager.getYouTubeDislikeScript() {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.system(size: 12))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(script.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("Text"))
+
+                            Text("Matches: \(script.matchPatterns.joined(separator: ", "))")
+                                .font(.system(size: 10))
+                                .foregroundColor(Color("TextMuted"))
+                        }
+
+                        Spacer()
+
+                        Text("Active")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.green.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .padding(.top, 4)
+
+                    Text("Reload YouTube tabs to apply changes.")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color("TextMuted"))
+                        .padding(.top, 4)
+                }
             }
         }
     }

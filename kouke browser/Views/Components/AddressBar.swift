@@ -185,7 +185,8 @@ struct AddressBar: View {
     private func toolbarButton(for button: ToolbarButton) -> some View {
         switch button {
         case .readerMode:
-            if settings.showReaderModeButton && isReaderModeAvailable {
+            // Reader Mode button is shown only when the page supports it (automatic)
+            if isReaderModeAvailable {
                 Button(action: toggleReaderMode) {
                     Image(systemName: isReaderModeActive ? "doc.plaintext.fill" : "doc.plaintext")
                         .font(.system(size: 14))
