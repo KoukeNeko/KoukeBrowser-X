@@ -385,6 +385,14 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(useMinimumFontSize, forKey: "useMinimumFontSize") }
     }
 
+    // Experiments settings
+    @Published var showYouTubeDislike: Bool {
+        didSet {
+            defaults.set(showYouTubeDislike, forKey: "showYouTubeDislike")
+            NotificationCenter.default.post(name: .youTubeDislikeSettingChanged, object: showYouTubeDislike)
+        }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -565,16 +573,24 @@ class BrowserSettings: ObservableObject {
 
         useMinimumFontSize = defaults.bool(forKey: "useMinimumFontSize")
 
+        // Experiments settings
+        showYouTubeDislike = defaults.bool(forKey: "showYouTubeDislike")
+
         // Toolbar button order (must be after all other properties are initialized)
+        // Reader Mode is always first and shown automatically based on page content
         if let savedOrder = defaults.stringArray(forKey: "toolbarButtonOrder") {
             toolbarButtonOrder = savedOrder.compactMap { ToolbarButton(rawValue: $0) }
-            // Ensure all buttons are present
-            for button in ToolbarButton.allCases {
+            // Ensure all buttons are present (Reader Mode first, then others)
+            if !toolbarButtonOrder.contains(.readerMode) {
+                toolbarButtonOrder.insert(.readerMode, at: 0)
+            }
+            for button in ToolbarButton.allCases where button != .readerMode {
                 if !toolbarButtonOrder.contains(button) {
                     toolbarButtonOrder.append(button)
                 }
             }
         } else {
+            // Default order: Reader Mode (automatic), Add to Favorites, Downloads, Bookmarks
             toolbarButtonOrder = [.readerMode, .addToFavorites, .downloads, .bookmarks]
         }
 
@@ -630,4 +646,5 @@ extension Notification.Name {
     static let developerSettingsChanged = Notification.Name("developerSettingsChanged")
     static let fontSizeChanged = Notification.Name("fontSizeChanged")
     static let setCurrentPageAsHomepage = Notification.Name("setCurrentPageAsHomepage")
+    static let youTubeDislikeSettingChanged = Notification.Name("youTubeDislikeSettingChanged")
 }
