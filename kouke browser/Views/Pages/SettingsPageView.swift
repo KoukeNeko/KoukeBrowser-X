@@ -1023,6 +1023,55 @@ private struct ExperimentsSettingsContent: View {
                         .foregroundColor(Color("TextMuted"))
                         .padding(.top, 4)
                 }
+
+                Divider()
+                    .padding(.vertical, 8)
+
+                SettingsPageRow(label: "") {
+                    Toggle("Skip sponsors and other segments (SponsorBlock)", isOn: $settings.enableSponsorBlock)
+                }
+
+                Text("Uses the SponsorBlock API to automatically skip sponsor segments, intros, outros, and other non-content sections in YouTube videos. Data is crowdsourced from users.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.top, 4)
+
+                if settings.enableSponsorBlock {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.system(size: 12))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SponsorBlock")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("Text"))
+
+                            Text("Skips: Sponsors, Self-Promo, Intros, Outros, Interaction Reminders, Previews")
+                                .font(.system(size: 10))
+                                .foregroundColor(Color("TextMuted"))
+                        }
+
+                        Spacer()
+
+                        Text("Active")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.green.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .padding(.top, 4)
+
+                    Text("Reload YouTube tabs to apply changes.")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color("TextMuted"))
+                        .padding(.top, 4)
+                }
             }
         }
     }
