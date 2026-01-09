@@ -70,8 +70,32 @@ struct WebViewContainer: NSViewRepresentable {
             }
         }
 
-        // Note: User scripts are now injected via evaluateJavaScript in didFinish
-        // for better SPA support (YouTube, etc.) and proper URL matching
+        // Add user scripts to WKUserContentController for proper injection timing
+        // Scripts with @run-at document-start or document-end need to be added here
+        // We also inject via evaluateJavaScript in didFinish for SPA navigation support
+        let allScripts = UserScriptManager.shared.allEnabledScripts()
+
+        if !allScripts.isEmpty {
+            // First, inject the GM API polyfill at document-start (before any userscripts)
+            // This provides Greasemonkey/Tampermonkey compatible APIs
+            let gmPolyfill = WKUserScript(
+                source: GMAPIPolyfill.generatePolyfill(scriptId: "shared"),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            )
+            configuration.userContentController.addUserScript(gmPolyfill)
+        }
+
+        for script in allScripts {
+            // For match pattern *://*/* we add to all pages, otherwise we still add
+            // and let the script's own @match logic or our URL check handle it
+            let wkScript = WKUserScript(
+                source: script.source,
+                injectionTime: script.injectionTime.wkInjectionTime,
+                forMainFrameOnly: !script.runOnAllFrames
+            )
+            configuration.userContentController.addUserScript(wkScript)
+        }
 
         // Note: Font size is now controlled via pageZoom instead of CSS injection
         // CSS injection of html font-size breaks sites that use rem units

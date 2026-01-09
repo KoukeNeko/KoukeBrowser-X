@@ -236,6 +236,7 @@ class UserScriptManager: ObservableObject {
         var match: [String] = []
         var exclude: [String] = []
         var include: [String] = []
+        var require: [String] = []  // URLs of required scripts
         var runAt: UserScriptInjectionTime = .documentEnd
         var runOnAllFrames: Bool = false
     }
@@ -261,7 +262,9 @@ class UserScriptManager: ObservableObject {
 
             // Parse @directive value
             if content.hasPrefix("@") {
-                let parts = content.dropFirst().split(separator: " ", maxSplits: 1)
+                // Split on any whitespace (space or tab), not just space
+                let directiveContent = content.dropFirst()
+                let parts = directiveContent.split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
                 guard let directive = parts.first else { continue }
                 let value = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespaces) : ""
 
@@ -279,6 +282,10 @@ class UserScriptManager: ObservableObject {
                 case "include":
                     if !value.isEmpty {
                         metadata.include.append(value)
+                    }
+                case "require":
+                    if !value.isEmpty {
+                        metadata.require.append(value)
                     }
                 case "run-at":
                     if value.contains("document-start") {
