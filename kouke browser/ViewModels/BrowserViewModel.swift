@@ -613,15 +613,43 @@ class BrowserViewModel: ObservableObject {
         let metadata = pendingUserScriptMetadata ?? UserScriptManager.shared.parseUserScriptMetadata(from: content)
         let name = metadata.name ?? url.deletingPathExtension().lastPathComponent
 
-        UserScriptManager.shared.addScript(
-            name: name,
-            source: content,
-            isEnabled: true,
-            injectionTime: metadata.runAt,
-            matchPatterns: metadata.match.isEmpty ? ["*://*/*"] : metadata.match,
-            excludePatterns: metadata.exclude,
-            runOnAllFrames: metadata.runOnAllFrames
-        )
+        // Fetch @require scripts and prepend them to the source
+        Task {
+            var finalSource = content
+
+            if !metadata.require.isEmpty {
+                var requiredScripts: [String] = []
+                for requireURL in metadata.require {
+                    if let scriptURL = URL(string: requireURL) {
+                        do {
+                            let (data, _) = try await URLSession.shared.data(from: scriptURL)
+                            if let scriptContent = String(data: data, encoding: .utf8) {
+                                requiredScripts.append("// @require \(requireURL)\n\(scriptContent)")
+                            }
+                        } catch {
+                            print("Kouke: Failed to fetch @require script: \(requireURL), error: \(error)")
+                        }
+                    }
+                }
+
+                // Prepend required scripts before the main script
+                if !requiredScripts.isEmpty {
+                    finalSource = requiredScripts.joined(separator: "\n\n") + "\n\n" + content
+                }
+            }
+
+            await MainActor.run {
+                UserScriptManager.shared.addScript(
+                    name: name,
+                    source: finalSource,
+                    isEnabled: true,
+                    injectionTime: metadata.runAt,
+                    matchPatterns: metadata.match.isEmpty ? ["*://*/*"] : metadata.match,
+                    excludePatterns: metadata.exclude,
+                    runOnAllFrames: metadata.runOnAllFrames
+                )
+            }
+        }
 
         clearPendingUserScript()
     }
