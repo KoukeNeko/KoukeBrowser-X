@@ -393,6 +393,11 @@ class BrowserSettings: ObservableObject {
         }
     }
 
+    // User Scripts settings
+    @Published var promptToInstallUserScripts: Bool {
+        didSet { defaults.set(promptToInstallUserScripts, forKey: "promptToInstallUserScripts") }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -575,6 +580,13 @@ class BrowserSettings: ObservableObject {
 
         // Experiments settings
         showYouTubeDislike = defaults.bool(forKey: "showYouTubeDislike")
+
+        // User Scripts settings
+        if defaults.object(forKey: "promptToInstallUserScripts") != nil {
+            promptToInstallUserScripts = defaults.bool(forKey: "promptToInstallUserScripts")
+        } else {
+            promptToInstallUserScripts = true
+        }
 
         // Toolbar button order (must be after all other properties are initialized)
         // Reader Mode is always first and shown automatically based on page content
