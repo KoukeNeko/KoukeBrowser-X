@@ -811,54 +811,63 @@ private struct UserScriptEditorView: View {
             // Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Name
+                    // Name (read-only, from @name)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Name")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Color("TextMuted"))
 
-                        TextField("My Script", text: $name)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    // Match Patterns
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Match Patterns (one per line)")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color("TextMuted"))
-
-                        TextEditor(text: $matchPatternsText)
-                            .font(.system(size: 12, design: .monospaced))
-                            .frame(height: 60)
-                            .padding(4)
+                        Text(name.isEmpty ? "Unnamed Script" : name)
+                            .font(.system(size: 13))
+                            .foregroundColor(Color("Text"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
                             .background(Color("Bg"))
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(Color("Border"), lineWidth: 1)
                             )
-
-                        Text("Examples: *://*.example.com/*, https://github.com/*")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color("TextMuted"))
                     }
 
-                    // Exclude Patterns
+                    // Match Patterns (read-only, from @match)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Exclude Patterns (optional, one per line)")
+                        Text("Match Patterns")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Color("TextMuted"))
 
-                        TextEditor(text: $excludePatternsText)
+                        Text(matchPatternsText.isEmpty ? "*://*/*" : matchPatternsText)
                             .font(.system(size: 12, design: .monospaced))
-                            .frame(height: 40)
-                            .padding(4)
+                            .foregroundColor(Color("Text"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
                             .background(Color("Bg"))
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(Color("Border"), lineWidth: 1)
                             )
+                    }
+
+                    // Exclude Patterns (read-only, from @exclude)
+                    if !excludePatternsText.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Exclude Patterns")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("TextMuted"))
+
+                            Text(excludePatternsText)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(Color("Text"))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(Color("Bg"))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color("Border"), lineWidth: 1)
+                                )
+                        }
                     }
 
                     // Options
