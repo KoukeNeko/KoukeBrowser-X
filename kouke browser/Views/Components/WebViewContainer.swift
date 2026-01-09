@@ -297,10 +297,6 @@ struct WebViewContainer: NSViewRepresentable {
                     )
                 }
 
-                // Inject user scripts via evaluateJavaScript for better SPA support
-                if let url = webView.url {
-                    self.injectUserScripts(into: webView, for: url)
-                }
 
                 // Check reader mode availability
                 ReaderModeService.shared.checkReadability(webView: webView) { [weak self] isReadable in
@@ -326,33 +322,6 @@ struct WebViewContainer: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             Task { @MainActor in
                 parent.viewModel.updateTabLoadingState(false, for: parent.tabId)
-            }
-        }
-
-        // MARK: - User Script Injection
-
-        /// Inject matching user scripts into the webview
-        private func injectUserScripts(into webView: WKWebView, for url: URL) {
-            let scripts = UserScriptManager.shared.allEnabledScripts()
-
-            for script in scripts {
-                // Check if script should run on this URL
-                guard script.shouldRun(on: url) else { continue }
-
-                // Wrap in IIFE to avoid conflicts and check if already injected
-                let wrappedSource = """
-                (function() {
-                    if (window.__kouke_script_\(script.id.uuidString.replacingOccurrences(of: "-", with: "_"))__) return;
-                    window.__kouke_script_\(script.id.uuidString.replacingOccurrences(of: "-", with: "_"))__ = true;
-                    \(script.source)
-                })();
-                """
-
-                webView.evaluateJavaScript(wrappedSource) { _, error in
-                    if let error = error {
-                        print("Kouke: Failed to inject script '\(script.name)': \(error.localizedDescription)")
-                    }
-                }
             }
         }
 
