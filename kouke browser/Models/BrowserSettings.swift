@@ -393,6 +393,13 @@ class BrowserSettings: ObservableObject {
         }
     }
 
+    @Published var enableSponsorBlock: Bool {
+        didSet {
+            defaults.set(enableSponsorBlock, forKey: "enableSponsorBlock")
+            NotificationCenter.default.post(name: .sponsorBlockSettingChanged, object: enableSponsorBlock)
+        }
+    }
+
     // User Scripts settings
     @Published var promptToInstallUserScripts: Bool {
         didSet { defaults.set(promptToInstallUserScripts, forKey: "promptToInstallUserScripts") }
@@ -580,6 +587,7 @@ class BrowserSettings: ObservableObject {
 
         // Experiments settings
         showYouTubeDislike = defaults.bool(forKey: "showYouTubeDislike")
+        enableSponsorBlock = defaults.bool(forKey: "enableSponsorBlock")
 
         // User Scripts settings
         if defaults.object(forKey: "promptToInstallUserScripts") != nil {
@@ -659,4 +667,5 @@ extension Notification.Name {
     static let fontSizeChanged = Notification.Name("fontSizeChanged")
     static let setCurrentPageAsHomepage = Notification.Name("setCurrentPageAsHomepage")
     static let youTubeDislikeSettingChanged = Notification.Name("youTubeDislikeSettingChanged")
+    static let sponsorBlockSettingChanged = Notification.Name("sponsorBlockSettingChanged")
 }

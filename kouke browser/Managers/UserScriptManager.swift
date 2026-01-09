@@ -24,6 +24,9 @@ class UserScriptManager: ObservableObject {
     /// ID for the YouTube Dislike script
     static let youTubeDislikeScriptId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
+    /// ID for the SponsorBlock script
+    static let sponsorBlockScriptId = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+
     private init() {
         loadScripts()
         setupExperimentalScripts()
@@ -40,10 +43,21 @@ class UserScriptManager: ObservableObject {
                 self?.updateYouTubeDislikeScript()
             }
         }
+
+        NotificationCenter.default.addObserver(
+            forName: .sponsorBlockSettingChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateSponsorBlockScript()
+            }
+        }
     }
 
     private func setupExperimentalScripts() {
         updateYouTubeDislikeScript()
+        updateSponsorBlockScript()
     }
 
     private func updateYouTubeDislikeScript() {
@@ -72,6 +86,34 @@ class UserScriptManager: ObservableObject {
     /// Get the YouTube Dislike script if enabled
     func getYouTubeDislikeScript() -> UserScript? {
         experimentalScripts.first { $0.id == Self.youTubeDislikeScriptId }
+    }
+
+    private func updateSponsorBlockScript() {
+        let isEnabled = BrowserSettings.shared.enableSponsorBlock
+
+        // Remove existing SponsorBlock script
+        experimentalScripts.removeAll { $0.id == Self.sponsorBlockScriptId }
+
+        if isEnabled {
+            let script = UserScript(
+                id: Self.sponsorBlockScriptId,
+                name: "SponsorBlock",
+                source: SponsorBlockService.getUserScript(),
+                isEnabled: true,
+                injectionTime: .documentEnd,
+                matchPatterns: ["*://*.youtube.com/*"],
+                excludePatterns: ["*://music.youtube.com/*"],
+                runOnAllFrames: false
+            )
+            experimentalScripts.append(script)
+        }
+
+        notifyScriptsChanged()
+    }
+
+    /// Get the SponsorBlock script if enabled
+    func getSponsorBlockScript() -> UserScript? {
+        experimentalScripts.first { $0.id == Self.sponsorBlockScriptId }
     }
 
     // MARK: - Script Operations
