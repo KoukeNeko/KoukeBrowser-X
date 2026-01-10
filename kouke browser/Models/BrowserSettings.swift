@@ -407,6 +407,12 @@ class BrowserSettings: ObservableObject {
         }
     }
 
+    @Published var enableDanmaku: Bool {
+        didSet {
+            defaults.set(enableDanmaku, forKey: "enableDanmaku")
+        }
+    }
+
     // User Scripts settings
     @Published var promptToInstallUserScripts: Bool {
         didSet { defaults.set(promptToInstallUserScripts, forKey: "promptToInstallUserScripts") }
@@ -601,6 +607,7 @@ class BrowserSettings: ObservableObject {
         // Experiments settings
         showYouTubeDislike = defaults.bool(forKey: "showYouTubeDislike")
         enableSponsorBlock = defaults.bool(forKey: "enableSponsorBlock")
+        enableDanmaku = defaults.bool(forKey: "enableDanmaku")
 
         // User Scripts settings
         if defaults.object(forKey: "promptToInstallUserScripts") != nil {

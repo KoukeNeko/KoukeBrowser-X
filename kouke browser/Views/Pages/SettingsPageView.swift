@@ -1084,6 +1084,49 @@ private struct ExperimentsSettingsContent: View {
                         .padding(.top, 4)
                 }
             }
+
+            SettingsCard(title: "Animation Crazy (巴哈姆特動畫瘋)") {
+                SettingsPageRow(label: "") {
+                    Toggle("Show danmaku (彈幕) in Picture-in-Picture", isOn: $settings.enableDanmaku)
+                }
+
+                Text("Display scrolling comments (danmaku/彈幕) overlay when using Picture-in-Picture mode on ani.gamer.com.tw. Comments are fetched from the Bahamut Animation API.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color("TextMuted"))
+                    .padding(.top, 4)
+
+                if settings.enableDanmaku {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.system(size: 12))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Danmaku Overlay")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color("Text"))
+
+                            Text("Supports: Scrolling, Top-fixed, Bottom-fixed comments with colors")
+                                .font(.system(size: 10))
+                                .foregroundColor(Color("TextMuted"))
+                        }
+
+                        Spacer()
+
+                        Text("Active")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.green.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .padding(.top, 4)
+                }
+            }
         }
     }
 }
