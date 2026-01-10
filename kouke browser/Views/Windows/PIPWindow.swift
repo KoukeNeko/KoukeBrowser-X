@@ -13,6 +13,273 @@ import AVKit
 import Combine
 import YouTubeKit
 
+// MARK: - Danmaku (Barrage) System
+
+/// Single danmaku comment
+struct Danmaku: Codable {
+    let text: String
+    let time: Int      // Time in 10ms units
+    let color: String  // Hex color like "#FFFFFF"
+    let position: Int  // 0=scroll, 1=top, 2=bottom
+
+    var timeInSeconds: Double {
+        // Time is in 10ms units (centiseconds), divide by 100 to get seconds
+        // But actual API seems to use different scale - testing with /10 (deciseconds)
+        return Double(time) / 10.0
+    }
+
+    var nsColor: NSColor {
+        // Parse hex color
+        var hex = color.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") {
+            hex.removeFirst()
+        }
+        guard hex.count == 6,
+              let rgb = UInt64(hex, radix: 16) else {
+            return .white
+        }
+        let r = CGFloat((rgb >> 16) & 0xFF) / 255.0
+        let g = CGFloat((rgb >> 8) & 0xFF) / 255.0
+        let b = CGFloat(rgb & 0xFF) / 255.0
+        return NSColor(red: r, green: g, blue: b, alpha: 1.0)
+    }
+}
+
+/// Danmaku overlay view that renders comments over video
+class DanmakuOverlayView: NSView {
+    private var danmakuList: [Danmaku] = []
+    private var activeDanmaku: [(danmaku: Danmaku, layer: CATextLayer, startTime: Double)] = []
+    private var displayLink: CVDisplayLink?
+    private var currentTime: Double = 0
+    private var lastProcessedIndex: Int = 0
+    private var isPlaying: Bool = false
+
+    // Display settings
+    private let scrollDuration: Double = 8.0  // Time for danmaku to scroll across screen
+    private let fontSize: CGFloat = 20.0
+    private let lineHeight: CGFloat = 28.0
+    private var topTracks: [Double] = []      // Track availability for top danmaku
+    private var bottomTracks: [Double] = []   // Track availability for bottom danmaku
+    private var scrollTracks: [(endTime: Double, endX: CGFloat)] = []  // Track for scroll danmaku collision
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+
+    private func setupView() {
+        wantsLayer = true
+        layer?.masksToBounds = true
+
+        // Initialize tracks
+        let trackCount = 15
+        topTracks = Array(repeating: 0, count: trackCount)
+        bottomTracks = Array(repeating: 0, count: trackCount)
+        scrollTracks = Array(repeating: (0, 0), count: trackCount)
+    }
+
+    func loadDanmaku(_ list: [Danmaku], startTime: Double = 0) {
+        // Sort by time
+        danmakuList = list.sorted { $0.time < $1.time }
+        // Find starting index based on current playback time
+        lastProcessedIndex = danmakuList.firstIndex { $0.timeInSeconds >= startTime } ?? danmakuList.count
+
+        // Debug: show time distribution
+        if let first = danmakuList.first, let last = danmakuList.last {
+            print("[Danmaku] Loaded \(danmakuList.count) comments, time range: \(first.timeInSeconds)s - \(last.timeInSeconds)s")
+            print("[Danmaku] Starting from index \(lastProcessedIndex) at playback time \(startTime)s")
+
+            // Count how many danmaku are after startTime
+            let remaining = danmakuList.filter { $0.timeInSeconds >= startTime }.count
+            print("[Danmaku] Remaining danmaku after current time: \(remaining)")
+        }
+    }
+
+    private var lastDebugPrintTime: Double = 0
+
+    func updateTime(_ time: Double, isPlaying: Bool) {
+        self.isPlaying = isPlaying
+
+        // Handle seek - reset if time jumped backwards
+        if time < currentTime - 1.0 {
+            clearAllDanmaku()
+            lastProcessedIndex = danmakuList.firstIndex { $0.timeInSeconds >= time } ?? 0
+            print("[Danmaku] Seek detected, reset to index \(lastProcessedIndex)")
+        }
+
+        currentTime = time
+
+        guard isPlaying else { return }
+
+        // Debug print every 5 seconds
+        if time - lastDebugPrintTime > 5.0 {
+            lastDebugPrintTime = time
+            print("[Danmaku] Time: \(String(format: "%.1f", time))s, index: \(lastProcessedIndex)/\(danmakuList.count), active: \(activeDanmaku.count)")
+        }
+
+        // Add new danmaku that should appear
+        var addedCount = 0
+        while lastProcessedIndex < danmakuList.count {
+            let danmaku = danmakuList[lastProcessedIndex]
+            if danmaku.timeInSeconds <= currentTime && danmaku.timeInSeconds > currentTime - 0.5 {
+                addDanmaku(danmaku)
+                lastProcessedIndex += 1
+                addedCount += 1
+            } else if danmaku.timeInSeconds > currentTime {
+                break
+            } else {
+                lastProcessedIndex += 1
+            }
+        }
+
+        if addedCount > 0 {
+            print("[Danmaku] Added \(addedCount) danmaku at time \(String(format: "%.1f", time))s")
+        }
+
+        // Update positions of scroll danmaku
+        updateScrollPositions()
+
+        // Remove expired danmaku
+        removeExpiredDanmaku()
+    }
+
+    private func addDanmaku(_ danmaku: Danmaku) {
+        let textLayer = CATextLayer()
+        textLayer.string = danmaku.text
+        textLayer.font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
+        textLayer.fontSize = fontSize
+        textLayer.foregroundColor = danmaku.nsColor.cgColor
+        textLayer.alignmentMode = .center
+        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+
+        // Add text shadow for better visibility
+        textLayer.shadowColor = NSColor.black.cgColor
+        textLayer.shadowOffset = CGSize(width: 1, height: -1)
+        textLayer.shadowRadius = 2
+        textLayer.shadowOpacity = 0.8
+
+        // Calculate text size
+        let textSize = (danmaku.text as NSString).size(withAttributes: [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .medium)
+        ])
+        textLayer.frame = CGRect(x: 0, y: 0, width: textSize.width + 10, height: lineHeight)
+
+        // Position based on type
+        switch danmaku.position {
+        case 1: // Top fixed
+            if let track = findAvailableTrack(for: &topTracks, duration: 3.0) {
+                textLayer.frame.origin = CGPoint(
+                    x: (bounds.width - textLayer.frame.width) / 2,
+                    y: bounds.height - CGFloat(track + 1) * lineHeight - 10
+                )
+                layer?.addSublayer(textLayer)
+                activeDanmaku.append((danmaku, textLayer, currentTime))
+            }
+
+        case 2: // Bottom fixed
+            if let track = findAvailableTrack(for: &bottomTracks, duration: 3.0) {
+                textLayer.frame.origin = CGPoint(
+                    x: (bounds.width - textLayer.frame.width) / 2,
+                    y: CGFloat(track) * lineHeight + 50  // Leave space for video controls
+                )
+                layer?.addSublayer(textLayer)
+                activeDanmaku.append((danmaku, textLayer, currentTime))
+            }
+
+        default: // Scroll (0 or others)
+            if let track = findScrollTrack(textWidth: textLayer.frame.width) {
+                textLayer.frame.origin = CGPoint(
+                    x: bounds.width,
+                    y: bounds.height - CGFloat(track + 1) * lineHeight - 10
+                )
+                layer?.addSublayer(textLayer)
+                activeDanmaku.append((danmaku, textLayer, currentTime))
+            }
+        }
+    }
+
+    private func findAvailableTrack(for tracks: inout [Double], duration: Double) -> Int? {
+        for (index, expireTime) in tracks.enumerated() {
+            if currentTime >= expireTime {
+                tracks[index] = currentTime + duration
+                return index
+            }
+        }
+        return nil
+    }
+
+    private func findScrollTrack(textWidth: CGFloat) -> Int? {
+        let speed = (bounds.width + textWidth) / scrollDuration
+
+        for (index, track) in scrollTracks.enumerated() {
+            // Check if previous danmaku has cleared enough space
+            if currentTime >= track.endTime || track.endX < bounds.width - 50 {
+                let endTime = currentTime + scrollDuration
+                scrollTracks[index] = (endTime, bounds.width + textWidth)
+                return index
+            }
+        }
+        return nil
+    }
+
+    private func updateScrollPositions() {
+        for (index, item) in activeDanmaku.enumerated().reversed() {
+            guard item.danmaku.position == 0 else { continue }
+
+            let elapsed = currentTime - item.startTime
+            let progress = elapsed / scrollDuration
+            let totalDistance = bounds.width + item.layer.frame.width
+            let newX = bounds.width - (totalDistance * progress)
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            item.layer.frame.origin.x = newX
+            CATransaction.commit()
+
+            // Update track info
+            if let trackIndex = scrollTracks.firstIndex(where: { $0.endTime == item.startTime + scrollDuration }) {
+                scrollTracks[trackIndex].endX = newX + item.layer.frame.width
+            }
+        }
+    }
+
+    private func removeExpiredDanmaku() {
+        activeDanmaku.removeAll { item in
+            let duration: Double
+            switch item.danmaku.position {
+            case 1, 2: duration = 3.0  // Fixed danmaku
+            default: duration = scrollDuration  // Scroll danmaku
+            }
+
+            if currentTime - item.startTime > duration {
+                item.layer.removeFromSuperlayer()
+                return true
+            }
+            return false
+        }
+    }
+
+    private func clearAllDanmaku() {
+        for item in activeDanmaku {
+            item.layer.removeFromSuperlayer()
+        }
+        activeDanmaku.removeAll()
+        topTracks = topTracks.map { _ in 0 }
+        bottomTracks = bottomTracks.map { _ in 0 }
+        scrollTracks = scrollTracks.map { _ in (0, 0) }
+    }
+
+    func cleanup() {
+        clearAllDanmaku()
+        danmakuList.removeAll()
+    }
+}
+
 // MARK: - PIP Window Controller
 
 class PIPWindowController: NSWindowController {
@@ -23,12 +290,17 @@ class PIPWindowController: NSWindowController {
     private var currentTime: Double = 0
     private var volume: Float = 1.0
     private var videoSizeObserver: NSKeyValueObservation?
+    private var timeObserver: Any?
+
+    // Danmaku support
+    private var danmakuOverlay: DanmakuOverlayView?
+    private var episodeSn: String?
 
     static var shared: PIPWindowController?
 
     private var httpHeaders: [String: String]?
 
-    convenience init(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?, headers: [String: String]? = nil) {
+    convenience init(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?, headers: [String: String]? = nil, episodeSn: String? = nil) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 225),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
@@ -41,9 +313,17 @@ class PIPWindowController: NSWindowController {
         self.currentTime = startTime
         self.volume = volume
         self.httpHeaders = headers
+        self.episodeSn = episodeSn
 
         setupWindow()
         setupPlayer(with: videoURL, startTime: startTime, volume: volume, headers: headers)
+
+        // Load danmaku if episode SN is available and feature is enabled
+        if let sn = episodeSn, BrowserSettings.shared.enableDanmaku {
+            Task {
+                await loadDanmaku(sn: sn)
+            }
+        }
     }
 
     private func setupWindow() {
@@ -93,6 +373,9 @@ class PIPWindowController: NSWindowController {
 
         window.contentView?.addSubview(playerView!)
 
+        // Setup danmaku overlay
+        setupDanmakuOverlay()
+
         // Observe video size to adjust window aspect ratio
         videoSizeObserver = playerItem.observe(\.presentationSize, options: [.new]) { [weak self] item, _ in
             guard let self = self, let window = self.window else { return }
@@ -116,6 +399,9 @@ class PIPWindowController: NSWindowController {
             }
         }
 
+        // Setup time observer for danmaku sync
+        setupTimeObserver()
+
         // Seek to start time
         let time = CMTime(seconds: startTime, preferredTimescale: 600)
         player?.seek(to: time) { [weak self] _ in
@@ -130,6 +416,76 @@ class PIPWindowController: NSWindowController {
            let playerLayer = playerView?.layer as? AVPlayerLayer {
             pipController = AVPictureInPictureController(playerLayer: playerLayer)
             pipController?.delegate = self
+        }
+    }
+
+    private func setupDanmakuOverlay() {
+        guard let window = window, let contentView = window.contentView else { return }
+
+        // Only setup danmaku overlay if feature is enabled
+        guard BrowserSettings.shared.enableDanmaku else { return }
+
+        danmakuOverlay = DanmakuOverlayView(frame: contentView.bounds)
+        danmakuOverlay?.autoresizingMask = [.width, .height]
+        danmakuOverlay?.wantsLayer = true
+        danmakuOverlay?.layer?.zPosition = 1000  // Ensure it's above video
+        contentView.addSubview(danmakuOverlay!, positioned: .above, relativeTo: playerView)
+
+        print("[Danmaku] Overlay setup completed, frame: \(contentView.bounds)")
+    }
+
+    private func setupTimeObserver() {
+        // Update danmaku every 0.016 seconds (60fps)
+        let interval = CMTime(seconds: 1.0/60.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            guard let self = self else { return }
+            let currentTime = time.seconds
+            let isPlaying = self.player?.rate != 0
+            self.danmakuOverlay?.updateTime(currentTime, isPlaying: isPlaying)
+        }
+    }
+
+    private func loadDanmaku(sn: String) async {
+        print("[Danmaku] Loading danmaku for sn: \(sn)")
+
+        guard let url = URL(string: "https://ani.gamer.com.tw/ajax/danmuGet.php") else {
+            print("[Danmaku] Invalid URL")
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded;charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.setValue("https://ani.gamer.com.tw/", forHTTPHeaderField: "Referer")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+        request.httpBody = "sn=\(sn)".data(using: .utf8)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            print("[Danmaku] Response received, data size: \(data.count) bytes")
+
+            // Debug: print first 500 chars of response
+            if let responseStr = String(data: data.prefix(500), encoding: .utf8) {
+                print("[Danmaku] Response preview: \(responseStr)")
+            }
+
+            let danmakuList = try JSONDecoder().decode([Danmaku].self, from: data)
+            print("[Danmaku] Decoded \(danmakuList.count) danmaku items")
+
+            await MainActor.run {
+                // Get current playback time to start from correct position
+                let currentTime = self.player?.currentTime().seconds ?? 0
+                self.danmakuOverlay?.loadDanmaku(danmakuList, startTime: currentTime)
+                print("[Danmaku] Loaded into overlay, overlay exists: \(self.danmakuOverlay != nil), currentTime: \(currentTime)")
+            }
+        } catch {
+            print("[Danmaku] Failed to load: \(error)")
+            // Print raw response for debugging
+            if let data = try? await URLSession.shared.data(for: request).0,
+               let str = String(data: data, encoding: .utf8) {
+                print("[Danmaku] Raw response: \(str.prefix(1000))")
+            }
         }
     }
 
@@ -166,6 +522,17 @@ class PIPWindowController: NSWindowController {
             resumeSourceVideo(at: currentTime)
         }
 
+        // Cleanup danmaku
+        danmakuOverlay?.cleanup()
+        danmakuOverlay?.removeFromSuperview()
+        danmakuOverlay = nil
+
+        // Remove time observer
+        if let observer = timeObserver {
+            player?.removeTimeObserver(observer)
+            timeObserver = nil
+        }
+
         videoSizeObserver?.invalidate()
         videoSizeObserver = nil
         player?.pause()
@@ -179,10 +546,10 @@ class PIPWindowController: NSWindowController {
         }
     }
 
-    static func show(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?, headers: [String: String]? = nil) {
+    static func show(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?, headers: [String: String]? = nil, episodeSn: String? = nil) {
         shared?.closePIP()
 
-        let controller = PIPWindowController(videoURL: videoURL, startTime: startTime, volume: volume, sourceWebView: sourceWebView, headers: headers)
+        let controller = PIPWindowController(videoURL: videoURL, startTime: startTime, volume: volume, sourceWebView: sourceWebView, headers: headers, episodeSn: episodeSn)
         controller.showWindow(nil)
         shared = controller
     }
@@ -202,6 +569,18 @@ extension PIPWindowController: NSWindowDelegate {
         if let currentTime = player?.currentTime().seconds, currentTime.isFinite {
             resumeSourceVideo(at: currentTime)
         }
+
+        // Cleanup danmaku
+        danmakuOverlay?.cleanup()
+        danmakuOverlay?.removeFromSuperview()
+        danmakuOverlay = nil
+
+        // Remove time observer
+        if let observer = timeObserver {
+            player?.removeTimeObserver(observer)
+            timeObserver = nil
+        }
+
         videoSizeObserver?.invalidate()
         videoSizeObserver = nil
         player?.pause()
@@ -782,7 +1161,7 @@ class PIPManager: ObservableObject {
 
             await MainActor.run {
                 self.isPIPActive = true
-                PIPWindowController.show(videoURL: m3u8Url, startTime: startTime, volume: volume, sourceWebView: webView, headers: headers)
+                PIPWindowController.show(videoURL: m3u8Url, startTime: startTime, volume: volume, sourceWebView: webView, headers: headers, episodeSn: sn)
             }
 
         } catch {
