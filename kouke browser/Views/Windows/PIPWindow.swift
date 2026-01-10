@@ -22,10 +22,13 @@ class PIPWindowController: NSWindowController {
     private weak var sourceWebView: WKWebView?
     private var currentTime: Double = 0
     private var volume: Float = 1.0
+    private var videoSizeObserver: NSKeyValueObservation?
 
     static var shared: PIPWindowController?
 
-    convenience init(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?) {
+    private var httpHeaders: [String: String]?
+
+    convenience init(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?, headers: [String: String]? = nil) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 225),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
@@ -37,9 +40,10 @@ class PIPWindowController: NSWindowController {
         self.sourceWebView = sourceWebView
         self.currentTime = startTime
         self.volume = volume
+        self.httpHeaders = headers
 
         setupWindow()
-        setupPlayer(with: videoURL, startTime: startTime, volume: volume)
+        setupPlayer(with: videoURL, startTime: startTime, volume: volume, headers: headers)
     }
 
     private func setupWindow() {
@@ -59,14 +63,23 @@ class PIPWindowController: NSWindowController {
         }
 
         window.minSize = NSSize(width: 280, height: 158)
-        window.aspectRatio = NSSize(width: 16, height: 9)
+        // Don't set fixed aspect ratio - will be updated when video loads
         window.delegate = self
     }
 
-    private func setupPlayer(with url: URL, startTime: Double, volume: Float) {
+    private func setupPlayer(with url: URL, startTime: Double, volume: Float, headers: [String: String]? = nil) {
         guard let window = window else { return }
 
-        let playerItem = AVPlayerItem(url: url)
+        let playerItem: AVPlayerItem
+
+        if let headers = headers, !headers.isEmpty {
+            // Use AVURLAsset with custom headers for streams that require authentication
+            let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+            playerItem = AVPlayerItem(asset: asset)
+        } else {
+            playerItem = AVPlayerItem(url: url)
+        }
+
         player = AVPlayer(playerItem: playerItem)
 
         // Set volume to match source video
@@ -79,6 +92,29 @@ class PIPWindowController: NSWindowController {
         playerView?.autoresizingMask = [.width, .height]
 
         window.contentView?.addSubview(playerView!)
+
+        // Observe video size to adjust window aspect ratio
+        videoSizeObserver = playerItem.observe(\.presentationSize, options: [.new]) { [weak self] item, _ in
+            guard let self = self, let window = self.window else { return }
+            let size = item.presentationSize
+            if size.width > 0 && size.height > 0 {
+                DispatchQueue.main.async {
+                    // Update window aspect ratio to match video
+                    window.aspectRatio = size
+
+                    // Resize window to fit the new aspect ratio while keeping width
+                    let currentFrame = window.frame
+                    let newHeight = currentFrame.width * (size.height / size.width)
+                    let newFrame = NSRect(
+                        x: currentFrame.origin.x,
+                        y: currentFrame.origin.y + (currentFrame.height - newHeight),
+                        width: currentFrame.width,
+                        height: newHeight
+                    )
+                    window.setFrame(newFrame, display: true, animate: true)
+                }
+            }
+        }
 
         // Seek to start time
         let time = CMTime(seconds: startTime, preferredTimescale: 600)
@@ -130,6 +166,8 @@ class PIPWindowController: NSWindowController {
             resumeSourceVideo(at: currentTime)
         }
 
+        videoSizeObserver?.invalidate()
+        videoSizeObserver = nil
         player?.pause()
         player = nil
         pipController = nil
@@ -141,10 +179,10 @@ class PIPWindowController: NSWindowController {
         }
     }
 
-    static func show(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?) {
+    static func show(videoURL: URL, startTime: Double, volume: Float, sourceWebView: WKWebView?, headers: [String: String]? = nil) {
         shared?.closePIP()
 
-        let controller = PIPWindowController(videoURL: videoURL, startTime: startTime, volume: volume, sourceWebView: sourceWebView)
+        let controller = PIPWindowController(videoURL: videoURL, startTime: startTime, volume: volume, sourceWebView: sourceWebView, headers: headers)
         controller.showWindow(nil)
         shared = controller
     }
@@ -164,6 +202,8 @@ extension PIPWindowController: NSWindowDelegate {
         if let currentTime = player?.currentTime().seconds, currentTime.isFinite {
             resumeSourceVideo(at: currentTime)
         }
+        videoSizeObserver?.invalidate()
+        videoSizeObserver = nil
         player?.pause()
         player = nil
         pipController = nil
@@ -228,15 +268,218 @@ class PIPManager: ObservableObject {
 
         currentWebView = webView
 
-        // Extract video info from the page
-        extractVideoInfo(from: webView)
+        // For blob URLs (HLS streams), we need to call requestPictureInPicture()
+        // in the SAME JavaScript execution to maintain user gesture context.
+        // So we do detection and activation in one call.
+        tryPIPWithFallback(from: webView)
+    }
+
+    /// Try PIP with automatic fallback to native browser PIP for blob URLs
+    private func tryPIPWithFallback(from webView: WKWebView) {
+        let script = """
+        (function() {
+            const videos = Array.from(document.querySelectorAll('video'));
+            if (videos.length === 0) return { type: 'no_video' };
+
+            // Find the best video candidate
+            let bestVideo = null;
+            let bestScore = -1;
+
+            for (const video of videos) {
+                let score = 0;
+                if (!video.paused && video.currentTime > 0) score += 1000;
+                if (video.duration && video.duration > 60) score += 100;
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    score += 50 + (video.videoWidth * video.videoHeight) / 10000;
+                }
+                if (video.currentTime > 0) score += 20;
+                if (video.readyState >= 2) score += 10;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestVideo = video;
+                }
+            }
+
+            if (!bestVideo) bestVideo = videos[0];
+            const video = bestVideo;
+            const src = video.src || video.currentSrc;
+            const isBlobUrl = src && src.startsWith('blob:');
+            const hostname = window.location.hostname;
+
+            // Site-specific: ani.gamer.com.tw (Bahamut Animation)
+            // This site uses HLS with encrypted streams, requiring API calls to get m3u8 URL
+            if (hostname.includes('ani.gamer.com.tw')) {
+                console.log('[Kouke PIP] Detected ani.gamer.com.tw');
+
+                // Extract SN (episode number) from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const sn = urlParams.get('sn');
+
+                if (sn) {
+                    console.log('[Kouke PIP] Found sn:', sn);
+                    return {
+                        type: 'ani_gamer_api',
+                        sn: sn,
+                        currentTime: video.currentTime,
+                        duration: video.duration,
+                        volume: video.muted ? 0 : video.volume
+                    };
+                } else {
+                    console.log('[Kouke PIP] No sn parameter found in URL');
+                }
+            }
+
+            // For blob URLs, try native PIP
+            if (isBlobUrl) {
+                // Force-remove PIP disable attribute if present
+                if (video.disablePictureInPicture) {
+                    video.disablePictureInPicture = false;
+                    video.removeAttribute('disablePictureInPicture');
+                }
+
+                if (document.pictureInPictureElement === video) {
+                    document.exitPictureInPicture();
+                    return { type: 'native_pip', action: 'exited' };
+                }
+
+                if (document.pictureInPictureEnabled) {
+                    video.requestPictureInPicture()
+                        .then(() => console.log('[Kouke PIP] Native PIP activated'))
+                        .catch(err => console.error('[Kouke PIP] Native PIP failed:', err));
+                    return { type: 'native_pip', action: 'requested' };
+                } else {
+                    return { type: 'native_pip', action: 'failed', error: 'PIP not supported' };
+                }
+            }
+
+            // For non-blob URLs, return video info for AVPlayer handling
+            const info = {
+                type: 'extract_url',
+                currentTime: video.currentTime,
+                duration: video.duration,
+                volume: video.muted ? 0 : video.volume,
+                isYouTube: window.location.hostname.includes('youtube.com')
+            };
+
+            if (info.isYouTube) {
+                const urlParams = new URLSearchParams(window.location.search);
+                info.videoId = urlParams.get('v');
+            } else if (src && !src.startsWith('blob:')) {
+                info.directUrl = src;
+            } else {
+                const source = video.querySelector('source');
+                if (source && source.src && !source.src.startsWith('blob:')) {
+                    info.directUrl = source.src;
+                }
+            }
+
+            return info;
+        })();
+        """
+
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            guard let self = self else { return }
+
+            print("[PIP] Result: \(String(describing: result))")
+
+            guard let info = result as? [String: Any],
+                  let type = info["type"] as? String else {
+                print("[PIP] No video found or invalid response")
+                return
+            }
+
+            switch type {
+            case "native_pip":
+                let action = info["action"] as? String ?? "unknown"
+                print("[PIP] Native PIP \(action)")
+                // Native PIP is browser-managed, we don't track state
+
+            case "ani_gamer_api":
+                // ani.gamer.com.tw requires API calls to get m3u8 URL
+                guard let sn = info["sn"] as? String else {
+                    print("[PIP] Missing sn for ani.gamer.com.tw")
+                    return
+                }
+                let currentTime = info["currentTime"] as? Double ?? 0
+                let volume = Float(info["volume"] as? Double ?? 1.0)
+
+                print("[PIP] ani.gamer.com.tw - Fetching m3u8 for sn: \(sn)")
+                Task {
+                    await self.extractAniGamerStream(sn: sn, startTime: currentTime, volume: volume, webView: webView)
+                }
+
+            case "extract_url":
+                let currentTime = info["currentTime"] as? Double ?? 0
+                let volume = Float(info["volume"] as? Double ?? 1.0)
+                let isYouTube = info["isYouTube"] as? Bool ?? false
+
+                if isYouTube, let videoId = info["videoId"] as? String {
+                    print("[PIP] YouTube video, using YouTubeKit")
+                    Task {
+                        await self.extractYouTubeStream(videoId: videoId, startTime: currentTime, volume: volume, webView: webView)
+                    }
+                } else if let directUrl = info["directUrl"] as? String,
+                          let url = URL(string: directUrl) {
+                    print("[PIP] Using direct video URL")
+                    DispatchQueue.main.async {
+                        self.isPIPActive = true
+                        PIPWindowController.show(videoURL: url, startTime: currentTime, volume: volume, sourceWebView: webView)
+                    }
+                } else {
+                    print("[PIP] Could not extract playable video URL")
+                }
+
+            default:
+                print("[PIP] Unknown type: \(type)")
+            }
+        }
     }
 
     private func extractVideoInfo(from webView: WKWebView) {
+        // Improved video selection: find the active/playing video, not just the first one
         let script = """
         (function() {
-            const video = document.querySelector('video');
-            if (!video) return null;
+            const videos = Array.from(document.querySelectorAll('video'));
+            if (videos.length === 0) return null;
+
+            // Find the best video candidate
+            // Priority: playing video > video with progress > largest video > first video
+            let bestVideo = null;
+            let bestScore = -1;
+
+            for (const video of videos) {
+                let score = 0;
+
+                // Strongly prefer videos that are currently playing
+                if (!video.paused && video.currentTime > 0) score += 1000;
+
+                // Prefer videos with actual content (has duration, not super short)
+                if (video.duration && video.duration > 60) score += 100;
+
+                // Prefer videos with visible dimensions (actual content)
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    score += 50;
+                    // Larger videos are more likely to be the main content
+                    score += (video.videoWidth * video.videoHeight) / 10000;
+                }
+
+                // Prefer videos with some playback progress
+                if (video.currentTime > 0) score += 20;
+
+                // Prefer videos that are ready to play
+                if (video.readyState >= 2) score += 10;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestVideo = video;
+                }
+            }
+
+            if (!bestVideo) bestVideo = videos[0];
+
+            const video = bestVideo;
+            let src = video.src || video.currentSrc;
 
             const info = {
                 currentTime: video.currentTime,
@@ -245,18 +488,17 @@ class PIPManager: ObservableObject {
                 volume: video.muted ? 0 : video.volume,
                 width: video.videoWidth,
                 height: video.videoHeight,
-                isYouTube: window.location.hostname.includes('youtube.com')
+                isYouTube: window.location.hostname.includes('youtube.com'),
+                isBlobUrl: src && src.startsWith('blob:'),
+                videoIndex: videos.indexOf(video)
             };
 
             // For YouTube, get the video ID
             if (info.isYouTube) {
                 const urlParams = new URLSearchParams(window.location.search);
                 info.videoId = urlParams.get('v');
-            } else {
-                // For non-YouTube sites, try to get direct URL
-                let src = video.src || video.currentSrc;
-
-                // Skip blob URLs
+            } else if (!info.isBlobUrl) {
+                // For non-YouTube sites with direct URLs
                 if (src && !src.startsWith('blob:')) {
                     info.directUrl = src;
                 }
@@ -283,6 +525,8 @@ class PIPManager: ObservableObject {
                 let currentTime = info["currentTime"] as? Double ?? 0
                 let volume = Float(info["volume"] as? Double ?? 1.0)
                 let isYouTube = info["isYouTube"] as? Bool ?? false
+                let isBlobUrl = info["isBlobUrl"] as? Bool ?? false
+                let videoIndex = info["videoIndex"] as? Int ?? 0
 
                 // Handle YouTube videos with YouTubeKit
                 if isYouTube, let videoId = info["videoId"] as? String {
@@ -290,6 +534,13 @@ class PIPManager: ObservableObject {
                     Task {
                         await self.extractYouTubeStream(videoId: videoId, startTime: currentTime, volume: volume, webView: webView)
                     }
+                    return
+                }
+
+                // For blob URLs (HLS streams like ani.gamer.com.tw), use native browser PIP
+                if isBlobUrl {
+                    print("[PIP] Blob URL detected (HLS stream), using native browser PIP")
+                    self.tryNativePIP(from: webView, videoIndex: videoIndex)
                     return
                 }
 
@@ -309,6 +560,66 @@ class PIPManager: ObservableObject {
 
             // Reset state
             DispatchQueue.main.async {
+                self.isPIPActive = false
+            }
+        }
+    }
+
+    /// Use the browser's native Picture-in-Picture API for blob/HLS streams
+    private func tryNativePIP(from webView: WKWebView, videoIndex: Int) {
+        let script = """
+        (function() {
+            const videos = Array.from(document.querySelectorAll('video'));
+            const video = videos[\(videoIndex)] || videos[0];
+            if (!video) return { success: false, error: 'No video found' };
+
+            // Check if PIP is supported
+            if (!document.pictureInPictureEnabled) {
+                return { success: false, error: 'PIP not supported' };
+            }
+
+            // Check if video can enter PIP
+            if (video.disablePictureInPicture) {
+                return { success: false, error: 'PIP disabled on video' };
+            }
+
+            // If already in PIP, exit
+            if (document.pictureInPictureElement === video) {
+                document.exitPictureInPicture();
+                return { success: true, action: 'exited' };
+            }
+
+            // Request PIP
+            video.requestPictureInPicture()
+                .then(() => console.log('[Kouke PIP] Native PIP activated'))
+                .catch(err => console.error('[Kouke PIP] Native PIP failed:', err));
+
+            return { success: true, action: 'requested' };
+        })();
+        """
+
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            guard let self = self else { return }
+
+            if let error = error {
+                print("[PIP] Native PIP error: \(error)")
+            }
+
+            if let info = result as? [String: Any] {
+                let success = info["success"] as? Bool ?? false
+                let action = info["action"] as? String
+                let errorMsg = info["error"] as? String
+
+                if success {
+                    print("[PIP] Native PIP \(action ?? "completed")")
+                    // Note: We don't set isPIPActive here because native PIP is managed by the browser
+                } else {
+                    print("[PIP] Native PIP failed: \(errorMsg ?? "unknown error")")
+                }
+            }
+
+            DispatchQueue.main.async {
+                // Reset our state since native PIP is browser-managed
                 self.isPIPActive = false
             }
         }
@@ -366,6 +677,116 @@ class PIPManager: ObservableObject {
 
         } catch {
             print("[PIP] YouTubeKit error: \(error)")
+            await MainActor.run {
+                self.isPIPActive = false
+            }
+        }
+    }
+
+    /// Extract ani.gamer.com.tw stream URL using their API
+    private func extractAniGamerStream(sn: String, startTime: Double, volume: Float, webView: WKWebView) async {
+        do {
+            print("[PIP] ani.gamer.com.tw - Step 1: Getting device ID")
+
+            // Step 1: Get device ID
+            guard let deviceIdUrl = URL(string: "https://ani.gamer.com.tw/ajax/getdeviceid.php") else {
+                print("[PIP] Invalid device ID URL")
+                return
+            }
+
+            var deviceIdRequest = URLRequest(url: deviceIdUrl)
+            deviceIdRequest.setValue("https://ani.gamer.com.tw/", forHTTPHeaderField: "Referer")
+            deviceIdRequest.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+
+            let (deviceIdData, _) = try await URLSession.shared.data(for: deviceIdRequest)
+
+            guard let deviceIdJson = try JSONSerialization.jsonObject(with: deviceIdData) as? [String: Any],
+                  let deviceId = deviceIdJson["deviceid"] as? String else {
+                print("[PIP] Failed to parse device ID response")
+                return
+            }
+
+            print("[PIP] ani.gamer.com.tw - Got device ID: \(deviceId)")
+
+            // Step 2: Get m3u8 URL
+            print("[PIP] ani.gamer.com.tw - Step 2: Getting m3u8 URL")
+            guard let m3u8ApiUrl = URL(string: "https://ani.gamer.com.tw/ajax/m3u8.php?sn=\(sn)&device=\(deviceId)") else {
+                print("[PIP] Invalid m3u8 API URL")
+                return
+            }
+
+            var m3u8Request = URLRequest(url: m3u8ApiUrl)
+            m3u8Request.setValue("https://ani.gamer.com.tw/animeVideo.php?sn=\(sn)", forHTTPHeaderField: "Referer")
+            m3u8Request.setValue("https://ani.gamer.com.tw", forHTTPHeaderField: "Origin")
+            m3u8Request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+
+            // Get cookies from WebView to include authentication
+            let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+            let cookieHeader = cookies
+                .filter { $0.domain.contains("gamer.com.tw") }
+                .map { "\($0.name)=\($0.value)" }
+                .joined(separator: "; ")
+
+            if !cookieHeader.isEmpty {
+                m3u8Request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+                print("[PIP] ani.gamer.com.tw - Using cookies for auth")
+            }
+
+            let (m3u8Data, _) = try await URLSession.shared.data(for: m3u8Request)
+
+            guard let m3u8Json = try JSONSerialization.jsonObject(with: m3u8Data) as? [String: Any] else {
+                print("[PIP] Failed to parse m3u8 response")
+                if let responseStr = String(data: m3u8Data, encoding: .utf8) {
+                    print("[PIP] Response: \(responseStr)")
+                }
+                return
+            }
+
+            print("[PIP] ani.gamer.com.tw - m3u8 response: \(m3u8Json)")
+
+            // Check for error
+            if let error = m3u8Json["error"] as? Int, error != 0 {
+                let errorMsg = m3u8Json["msg"] as? String ?? "Unknown error"
+                print("[PIP] ani.gamer.com.tw API error: \(errorMsg)")
+                return
+            }
+
+            // Extract m3u8 URL from response
+            var m3u8UrlString = m3u8Json["src"] as? String
+
+            // Handle the case where src might be empty or contain a placeholder
+            if m3u8UrlString == nil || m3u8UrlString?.isEmpty == true || m3u8UrlString?.contains("welcome_to_anigamer") == true {
+                print("[PIP] ani.gamer.com.tw - No valid m3u8 URL in response (may require authentication or ad viewing)")
+                return
+            }
+
+            // Ensure URL has proper protocol
+            if m3u8UrlString?.hasPrefix("//") == true {
+                m3u8UrlString = "https:" + m3u8UrlString!
+            }
+
+            guard let m3u8UrlString = m3u8UrlString,
+                  let m3u8Url = URL(string: m3u8UrlString) else {
+                print("[PIP] Invalid m3u8 URL")
+                return
+            }
+
+            print("[PIP] ani.gamer.com.tw - Got m3u8 URL: \(m3u8Url)")
+
+            // Prepare headers for HLS playback
+            let headers: [String: String] = [
+                "Referer": "https://ani.gamer.com.tw/",
+                "Origin": "https://ani.gamer.com.tw",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+            ]
+
+            await MainActor.run {
+                self.isPIPActive = true
+                PIPWindowController.show(videoURL: m3u8Url, startTime: startTime, volume: volume, sourceWebView: webView, headers: headers)
+            }
+
+        } catch {
+            print("[PIP] ani.gamer.com.tw error: \(error)")
             await MainActor.run {
                 self.isPIPActive = false
             }
