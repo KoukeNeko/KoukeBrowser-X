@@ -182,6 +182,7 @@ enum RemoveHistoryItems: String, CaseIterable {
 
 enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
     case readerMode = "reader_mode"
+    case pip = "pip"
     case addToFavorites = "add_to_favorites"
     case downloads = "downloads"
     case bookmarks = "bookmarks"
@@ -191,6 +192,7 @@ enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
     var displayName: String {
         switch self {
         case .readerMode: return "Reader Mode"
+        case .pip: return "Picture in Picture"
         case .addToFavorites: return "Add to Favorites"
         case .downloads: return "Downloads"
         case .bookmarks: return "Bookmarks"
@@ -200,6 +202,7 @@ enum ToolbarButton: String, CaseIterable, Identifiable, Codable {
     var icon: String {
         switch self {
         case .readerMode: return "doc.plaintext"
+        case .pip: return "pip"
         case .addToFavorites: return "star"
         case .downloads: return "arrow.down.circle"
         case .bookmarks: return "book"
@@ -359,6 +362,10 @@ class BrowserSettings: ObservableObject {
 
     @Published var showAddToFavoritesButton: Bool {
         didSet { defaults.set(showAddToFavoritesButton, forKey: "showAddToFavoritesButton") }
+    }
+
+    @Published var showPIPButton: Bool {
+        didSet { defaults.set(showPIPButton, forKey: "showPIPButton") }
     }
 
     @Published var alwaysUseSheetForMenuShortcuts: Bool {
@@ -575,6 +582,12 @@ class BrowserSettings: ObservableObject {
             showAddToFavoritesButton = true
         }
 
+        if defaults.object(forKey: "showPIPButton") != nil {
+            showPIPButton = defaults.bool(forKey: "showPIPButton")
+        } else {
+            showPIPButton = true
+        }
+
         alwaysUseSheetForMenuShortcuts = defaults.bool(forKey: "alwaysUseSheetForMenuShortcuts")
 
         // Advanced settings
@@ -610,8 +623,8 @@ class BrowserSettings: ObservableObject {
                 }
             }
         } else {
-            // Default order: Reader Mode (automatic), Add to Favorites, Downloads, Bookmarks
-            toolbarButtonOrder = [.readerMode, .addToFavorites, .downloads, .bookmarks]
+            // Default order: Reader Mode (automatic), PIP, Add to Favorites, Downloads, Bookmarks
+            toolbarButtonOrder = [.readerMode, .pip, .addToFavorites, .downloads, .bookmarks]
         }
 
         // Apply saved theme on startup

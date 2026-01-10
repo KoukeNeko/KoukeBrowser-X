@@ -6,17 +6,20 @@
 //
 
 import SwiftUI
+import Combine
 
 struct AddressBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @ObservedObject var bookmarkManager = BookmarkManager.shared
     @ObservedObject var settings = BrowserSettings.shared
     @ObservedObject var downloadManager = DownloadManager.shared
+    @ObservedObject var pipManager = PIPManager.shared
     @FocusState private var isAddressFocused: Bool
     @State private var showingAddBookmark = false
     @State private var showingBookmarks = false
     @State private var showingDownloads = false
     @State private var showingSecurityInfo = false
+    @State private var hasPlayingVideo = false
 
     /// Calculate overall download progress (0.0 to 1.0)
     private var downloadProgress: Double? {
@@ -150,6 +153,18 @@ struct AddressBar: View {
         .onReceive(NotificationCenter.default.publisher(for: .bookmarkTab)) { _ in
             toggleBookmark()
         }
+        .onReceive(Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()) { _ in
+            // Periodically check for playing videos
+            if settings.showPIPButton {
+                checkForPlayingVideo()
+            }
+        }
+        .onChange(of: viewModel.activeTabId) { _, _ in
+            // Check for video when tab changes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                checkForPlayingVideo()
+            }
+        }
     }
 
     private func toggleBookmark() {
@@ -181,6 +196,24 @@ struct AddressBar: View {
         }
     }
 
+    private func togglePIP() {
+        guard let tabId = viewModel.activeTabId,
+              let webView = viewModel.getActiveWebView() else { return }
+
+        pipManager.togglePIP(from: webView, sourceTabId: tabId)
+    }
+
+    private func checkForPlayingVideo() {
+        guard let webView = viewModel.getActiveWebView() else {
+            hasPlayingVideo = false
+            return
+        }
+
+        pipManager.checkForPlayingVideo(in: webView) { hasVideo in
+            self.hasPlayingVideo = hasVideo
+        }
+    }
+
     @ViewBuilder
     private func toolbarButton(for button: ToolbarButton) -> some View {
         switch button {
@@ -196,6 +229,20 @@ struct AddressBar: View {
                 .padding(6)
                 .contentShape(Rectangle())
                 .help(isReaderModeActive ? "Exit Reader Mode" : "Enter Reader Mode")
+            }
+
+        case .pip:
+            // PIP button is shown only when there's a playing video
+            if settings.showPIPButton && hasPlayingVideo {
+                Button(action: togglePIP) {
+                    Image(systemName: pipManager.isPIPActive ? "pip.fill" : "pip")
+                        .font(.system(size: 14))
+                        .foregroundColor(pipManager.isPIPActive ? Color.accentColor : Color("TextMuted"))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .contentShape(Rectangle())
+                .help(pipManager.isPIPActive ? "Close Picture in Picture" : "Picture in Picture")
             }
 
         case .addToFavorites:

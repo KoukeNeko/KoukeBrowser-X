@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C8YTKIT12F0BE74F00F9315D /* YouTubeKit in Frameworks */ = {isa = PBXBuildFile; productRef = C8YTKIT02F0BE74F00F9315D /* YouTubeKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		C84F773B2F0BE74F00F9315D /* kouke browser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "kouke browser.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C8YTKIT12F0BE74F00F9315D /* YouTubeKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = "kouke browser";
 			packageProductDependencies = (
+				C8YTKIT02F0BE74F00F9315D /* YouTubeKit */,
 			);
 			productName = "kouke browser";
 			productReference = C84F773B2F0BE74F00F9315D /* kouke browser.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = C84F77322F0BE74F00F9315D;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C8YTKIT002F0BE74F00F9315D /* XCRemoteSwiftPackageReference "YouTubeKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C84F773C2F0BE74F00F9315D /* Products */;
 			projectDirPath = "";
@@ -357,6 +366,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C8YTKIT002F0BE74F00F9315D /* XCRemoteSwiftPackageReference "YouTubeKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/alexeichhorn/YouTubeKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C8YTKIT02F0BE74F00F9315D /* YouTubeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C8YTKIT002F0BE74F00F9315D /* XCRemoteSwiftPackageReference "YouTubeKit" */;
+			productName = YouTubeKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C84F77332F0BE74F00F9315D /* Project object */;
 }

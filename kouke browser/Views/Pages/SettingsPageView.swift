@@ -340,6 +340,7 @@ private struct ToolbarButtonOrderList: View {
     private func isButtonEnabled(_ button: ToolbarButton) -> Bool {
         switch button {
         case .readerMode: return true // Always enabled when available
+        case .pip: return settings.showPIPButton
         case .addToFavorites: return settings.showAddToFavoritesButton
         case .downloads: return settings.showDownloadsButton
         case .bookmarks: return settings.showBookmarksButton
@@ -349,6 +350,7 @@ private struct ToolbarButtonOrderList: View {
     private func toggleButton(_ button: ToolbarButton) {
         switch button {
         case .readerMode: break // Reader mode visibility is automatic
+        case .pip: settings.showPIPButton.toggle()
         case .addToFavorites: settings.showAddToFavoritesButton.toggle()
         case .downloads: settings.showDownloadsButton.toggle()
         case .bookmarks: settings.showBookmarksButton.toggle()
