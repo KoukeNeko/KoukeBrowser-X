@@ -14,6 +14,7 @@ struct CompactTabBar: View {
     @ObservedObject private var bookmarkManager = BookmarkManager.shared
     @State private var draggedTabId: UUID?
     @State private var showingBookmarks = false
+    @State private var isDropTargeted: Bool = false
 
     private var isCurrentPageBookmarked: Bool {
         guard let tab = viewModel.activeTab else { return false }
@@ -102,9 +103,19 @@ struct CompactTabBar: View {
                             .frame(width: tabWidth)
                             .id("\(tab.id)-\(isDark)")  // Force view recreation on theme change
                         }
+
                     }
                 }
                 .frame(width: max(0, availableWidth)) // Ensure non-negative width
+                .background(
+                    // Drop zone as background - doesn't affect layout
+                    TabDropZoneView(
+                        isDropTargeted: $isDropTargeted,
+                        onReceiveTab: { transferData in
+                            receiveTabAtEnd(transferData: transferData)
+                        }
+                    )
+                )
 
                 // Right side buttons
                 HStack(spacing: 4) {
@@ -213,6 +224,22 @@ struct CompactTabBar: View {
                     viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
                 } else {
                     viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
+                }
+            }
+        }
+    }
+
+    private func receiveTabAtEnd(transferData: TabTransferData) {
+        guard let tabId = UUID(uuidString: transferData.tabId) else { return }
+
+        if let result = WindowManager.shared.removeTabFromWindow(
+            windowNumber: transferData.sourceWindowId,
+            tabId: tabId
+        ) {
+            withAnimation(.default) {
+                viewModel.addExistingTab(result.tab)
+                if let webView = result.webView {
+                    viewModel.registerWebView(webView, for: result.tab.id)
                 }
             }
         }

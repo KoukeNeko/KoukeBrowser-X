@@ -6,6 +6,7 @@ struct TabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @State private var draggedTabId: UUID?
     @State private var availableWidth: CGFloat = 800
+    @State private var isDropTargeted: Bool = false
 
     // Constants for tab sizing
     private let maxTabWidth: CGFloat = 200
@@ -97,6 +98,15 @@ struct TabBar: View {
                     }
                 }
             )
+            .background(
+                // Drop zone as background - doesn't affect layout
+                TabDropZoneView(
+                    isDropTargeted: $isDropTargeted,
+                    onReceiveTab: { transferData in
+                        receiveTabAtEnd(transferData: transferData)
+                    }
+                )
+            )
         }
         .frame(height: 40)
         .background(Color("TitleBarBg"))
@@ -142,6 +152,133 @@ struct TabBar: View {
                 }
             }
         }
+    }
+
+    private func receiveTabAtEnd(transferData: TabTransferData) {
+        guard let tabId = UUID(uuidString: transferData.tabId) else { return }
+
+        if let result = WindowManager.shared.removeTabFromWindow(
+            windowNumber: transferData.sourceWindowId,
+            tabId: tabId
+        ) {
+            withAnimation(.default) {
+                viewModel.addExistingTab(result.tab)
+                if let webView = result.webView {
+                    viewModel.registerWebView(webView, for: result.tab.id)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Tab Drop Zone View
+
+struct TabDropZoneView: NSViewRepresentable {
+    @Binding var isDropTargeted: Bool
+    var onReceiveTab: (TabTransferData) -> Void
+
+    func makeNSView(context: Context) -> TabDropZoneNSView {
+        let view = TabDropZoneNSView()
+        view.onDropTargetChanged = { isTargeted in
+            DispatchQueue.main.async {
+                isDropTargeted = isTargeted
+            }
+        }
+        view.onReceiveTab = onReceiveTab
+        return view
+    }
+
+    func updateNSView(_ nsView: TabDropZoneNSView, context: Context) {}
+}
+
+class TabDropZoneNSView: NSView {
+    var onDropTargetChanged: ((Bool) -> Void)?
+    var onReceiveTab: ((TabTransferData) -> Void)?
+
+    private var dropIndicator: NSView?
+    private var isShowingIndicator = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+
+    private func setupView() {
+        wantsLayer = true
+        registerForDraggedTypes([.tabData])
+
+        // Create drop indicator
+        let indicator = NSView()
+        indicator.wantsLayer = true
+        indicator.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        indicator.layer?.cornerRadius = 1.5
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.isHidden = true
+        addSubview(indicator)
+        dropIndicator = indicator
+
+        NSLayoutConstraint.activate([
+            indicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            indicator.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            indicator.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            indicator.widthAnchor.constraint(equalToConstant: 3)
+        ])
+    }
+
+    private func showDropIndicator() {
+        guard !isShowingIndicator else { return }
+        isShowingIndicator = true
+        dropIndicator?.isHidden = false
+        onDropTargetChanged?(true)
+    }
+
+    private func hideDropIndicator() {
+        guard isShowingIndicator else { return }
+        isShowingIndicator = false
+        dropIndicator?.isHidden = true
+        onDropTargetChanged?(false)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else {
+            return []
+        }
+        showDropIndicator()
+        return .move
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else {
+            hideDropIndicator()
+            return []
+        }
+        showDropIndicator()
+        return .move
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        hideDropIndicator()
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        hideDropIndicator()
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        hideDropIndicator()
+
+        guard let data = sender.draggingPasteboard.data(forType: .tabData),
+              let transferData = try? JSONDecoder().decode(TabTransferData.self, from: data) else {
+            return false
+        }
+
+        onReceiveTab?(transferData)
+        return true
     }
 }
 
