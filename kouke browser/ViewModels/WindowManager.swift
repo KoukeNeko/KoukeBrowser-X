@@ -88,13 +88,16 @@ class WindowManager {
         } else {
             NSLog("✅ WindowManager: Successfully detached tab")
 
-            // If this was the last tab, close the source window
+            // If this was the last tab, close the source window after a brief delay
+            // to allow the current drag operation to complete
             if isLastTab {
-                NSLog("🚪 WindowManager: Closing empty window #\(windowNumber)")
-                // Find window from all app windows, not just our tracked windows array
-                // This handles both main window (from BrowserView) and secondary windows (from createNewWindow)
-                if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
-                    window.close()
+                NSLog("🚪 WindowManager: Will close empty window #\(windowNumber)")
+                // Use DispatchQueue to delay the close operation, avoiding crash during drag operation
+                DispatchQueue.main.async {
+                    // Find window from all app windows, not just our tracked windows array
+                    if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
+                        window.close()
+                    }
                 }
             }
         }
@@ -190,6 +193,9 @@ class WindowManager {
         NSLog("📝 WindowManager.createNewWindow: Registered viewModel for window #\(windowNumber). Total: \(windowViewModels.count)")
 
         // Clean up closed windows
+        // Note: Using synchronous cleanup since notification is already on main queue
+        // Avoid using Task { @MainActor } here as it can cause EXC_BAD_ACCESS
+        // when the async task completes after objects are deallocated
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
@@ -197,11 +203,10 @@ class WindowManager {
         ) { [weak self] notification in
             guard let self = self,
                   let closedWindow = notification.object as? NSWindow else { return }
-            Task { @MainActor [weak self] in
-                self?.windows.removeAll { $0 == closedWindow }
-                self?.windowViewModels.removeValue(forKey: windowNumber)
-                NSLog("🗑️ WindowManager: Unregistered window #\(windowNumber). Remaining: \(self?.windowViewModels.count ?? 0)")
-            }
+            // Synchronous cleanup - no Task needed since we're already on main queue
+            self.windows.removeAll { $0 == closedWindow }
+            self.windowViewModels.removeValue(forKey: windowNumber)
+            NSLog("🗑️ WindowManager: Unregistered window #\(windowNumber). Remaining: \(self.windowViewModels.count)")
         }
     }
 
