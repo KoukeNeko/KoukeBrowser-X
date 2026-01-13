@@ -774,8 +774,13 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
             return []
         }
 
-        // Don't allow dropping on self
+        // Don't allow dropping on self - check both tab view types
         if let source = sender.draggingSource as? DraggableTabContainerView,
+           source.tabId == tabId {
+            return []
+        }
+        // Also check CompactDraggableTabContainerView for cross-style compatibility
+        if let source = sender.draggingSource as? CompactDraggableTabContainerView,
            source.tabId == tabId {
             return []
         }
@@ -793,8 +798,14 @@ class DraggableTabContainerView: NSView, NSDraggingSource {
             return []
         }
 
-        // Don't allow dropping on self
+        // Don't allow dropping on self - check both tab view types
         if let source = sender.draggingSource as? DraggableTabContainerView,
+           source.tabId == tabId {
+            hideDropIndicators()
+            return []
+        }
+        // Also check CompactDraggableTabContainerView for cross-style compatibility
+        if let source = sender.draggingSource as? CompactDraggableTabContainerView,
            source.tabId == tabId {
             hideDropIndicators()
             return []

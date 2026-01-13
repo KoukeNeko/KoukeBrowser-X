@@ -64,13 +64,41 @@ class WindowManager {
 
     /// Register a view model for a window (called from BrowserView)
     func registerViewModel(_ viewModel: BrowserViewModel, for window: NSWindow) {
-        windowViewModels[window.windowNumber] = viewModel
+        let windowNumber = window.windowNumber
+        windowViewModels[windowNumber] = viewModel
+        NSLog("📝 WindowManager: Registered viewModel for window #\(windowNumber). Total registered: \(windowViewModels.count)")
     }
 
     /// Remove tab from a specific window and return it along with WebView
+    /// If the window becomes empty after removing the tab, it will be closed automatically
     func removeTabFromWindow(windowNumber: Int, tabId: UUID) -> (tab: Tab, webView: WKWebView?)? {
-        guard let viewModel = windowViewModels[windowNumber] else { return nil }
-        return viewModel.detachTab(tabId)
+        NSLog("🔍 WindowManager: Attempting to remove tab \(tabId) from window #\(windowNumber)")
+        NSLog("🔍 WindowManager: Registered windows: \(Array(windowViewModels.keys))")
+
+        guard let viewModel = windowViewModels[windowNumber] else {
+            NSLog("❌ WindowManager: No viewModel found for window #\(windowNumber)")
+            return nil
+        }
+
+        let isLastTab = viewModel.tabs.count == 1
+        let result = viewModel.detachTab(tabId, allowLastTab: true)
+
+        if result == nil {
+            NSLog("❌ WindowManager: detachTab returned nil")
+        } else {
+            NSLog("✅ WindowManager: Successfully detached tab")
+
+            // If this was the last tab, close the source window
+            if isLastTab {
+                NSLog("🚪 WindowManager: Closing empty window #\(windowNumber)")
+                // Find window from all app windows, not just our tracked windows array
+                // This handles both main window (from BrowserView) and secondary windows (from createNewWindow)
+                if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
+                    window.close()
+                }
+            }
+        }
+        return result
     }
 
     /// Create a new browser window with a detached tab or a new blank tab
@@ -157,11 +185,11 @@ class WindowManager {
 
         // Keep reference and register viewModel
         windows.append(window)
-        windowViewModels[window.windowNumber] = viewModel
+        let windowNumber = window.windowNumber
+        windowViewModels[windowNumber] = viewModel
+        NSLog("📝 WindowManager.createNewWindow: Registered viewModel for window #\(windowNumber). Total: \(windowViewModels.count)")
 
         // Clean up closed windows
-        // Capture windowNumber before the window is deallocated
-        let windowNumber = window.windowNumber
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
@@ -172,6 +200,7 @@ class WindowManager {
             Task { @MainActor [weak self] in
                 self?.windows.removeAll { $0 == closedWindow }
                 self?.windowViewModels.removeValue(forKey: windowNumber)
+                NSLog("🗑️ WindowManager: Unregistered window #\(windowNumber). Remaining: \(self?.windowViewModels.count ?? 0)")
             }
         }
     }
