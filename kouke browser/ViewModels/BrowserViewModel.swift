@@ -243,9 +243,17 @@ class BrowserViewModel: ObservableObject {
     }
 
     /// Detach a tab and return its data along with the WebView for transfer
-    func detachTab(_ id: UUID) -> (tab: Tab, webView: WKWebView?)? {
-        guard tabs.count > 1,
-              let index = tabs.firstIndex(where: { $0.id == id }) else { return nil }
+    /// - Parameters:
+    ///   - id: The tab ID to detach
+    ///   - allowLastTab: If true, allows detaching the last tab (used for cross-window merging)
+    /// - Returns: The detached tab and its WebView, or nil if detach is not allowed
+    func detachTab(_ id: UUID, allowLastTab: Bool = false) -> (tab: Tab, webView: WKWebView?)? {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return nil }
+
+        // Don't allow detaching the last tab unless explicitly allowed (for cross-window merging)
+        if tabs.count == 1 && !allowLastTab {
+            return nil
+        }
 
         let tab = tabs[index]
         let webView = webViews[id]
@@ -254,8 +262,8 @@ class BrowserViewModel: ObservableObject {
         webViews.removeValue(forKey: id)
         tabs.remove(at: index)
 
-        // Switch to adjacent tab
-        if activeTabId == id {
+        // Switch to adjacent tab if there are remaining tabs
+        if activeTabId == id && !tabs.isEmpty {
             let newIndex = min(index, tabs.count - 1)
             activeTabId = tabs[newIndex].id
             inputURL = tabs[newIndex].url

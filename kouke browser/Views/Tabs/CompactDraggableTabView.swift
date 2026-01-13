@@ -730,7 +730,13 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             return []
         }
 
+        // Don't allow dropping on self - check both tab view types
         if let source = sender.draggingSource as? CompactDraggableTabContainerView,
+           source.tabId == tabId {
+            return []
+        }
+        // Also check DraggableTabContainerView for cross-style compatibility
+        if let source = sender.draggingSource as? DraggableTabContainerView,
            source.tabId == tabId {
             return []
         }
@@ -747,7 +753,14 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             return []
         }
 
+        // Don't allow dropping on self - check both tab view types
         if let source = sender.draggingSource as? CompactDraggableTabContainerView,
+           source.tabId == tabId {
+            hideDropIndicators()
+            return []
+        }
+        // Also check DraggableTabContainerView for cross-style compatibility
+        if let source = sender.draggingSource as? DraggableTabContainerView,
            source.tabId == tabId {
             hideDropIndicators()
             return []
