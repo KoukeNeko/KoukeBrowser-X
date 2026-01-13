@@ -147,35 +147,40 @@ class DownloadManager: ObservableObject {
 
     // MARK: - Internal Update Methods
 
+    // Throttle interval for UI updates (in seconds)
+    private static let updateThrottleInterval: TimeInterval = 0.1  // 100ms
+
     func updateProgress(for id: UUID, downloadedSize: Int64, totalSize: Int64?) {
         guard let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
 
         let now = Date()
         let item = downloadItems[index]
 
-        // Calculate speed
+        // Throttle updates to avoid UI lag - only update every 100ms
+        // But always update if this is the first update (lastUpdateTime is nil)
         if let lastTime = item.lastUpdateTime {
             let elapsed = now.timeIntervalSince(lastTime)
-            if elapsed > 0.1 { // Update at least every 100ms
-                let bytesDiff = downloadedSize - item.lastDownloadedSize
-                let instantSpeed = Double(bytesDiff) / elapsed
-
-                // Smooth the speed with exponential moving average
-                let alpha = 0.3
-                if item.bytesPerSecond > 0 {
-                    downloadItems[index].bytesPerSecond = alpha * instantSpeed + (1 - alpha) * item.bytesPerSecond
-                } else {
-                    downloadItems[index].bytesPerSecond = instantSpeed
-                }
-
-                downloadItems[index].lastUpdateTime = now
-                downloadItems[index].lastDownloadedSize = downloadedSize
+            if elapsed < Self.updateThrottleInterval {
+                // Skip this update, too soon
+                return
             }
-        } else {
-            downloadItems[index].lastUpdateTime = now
-            downloadItems[index].lastDownloadedSize = downloadedSize
+
+            // Calculate speed
+            let bytesDiff = downloadedSize - item.lastDownloadedSize
+            let instantSpeed = Double(bytesDiff) / elapsed
+
+            // Smooth the speed with exponential moving average
+            let alpha = 0.3
+            if item.bytesPerSecond > 0 {
+                downloadItems[index].bytesPerSecond = alpha * instantSpeed + (1 - alpha) * item.bytesPerSecond
+            } else {
+                downloadItems[index].bytesPerSecond = instantSpeed
+            }
         }
 
+        // Update progress data
+        downloadItems[index].lastUpdateTime = now
+        downloadItems[index].lastDownloadedSize = downloadedSize
         downloadItems[index].downloadedSize = downloadedSize
         if let total = totalSize {
             downloadItems[index].fileSize = total

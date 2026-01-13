@@ -605,18 +605,47 @@ struct WebViewContainer: NSViewRepresentable {
             decisionHandler(.allow)
         }
 
+        // Store strong reference to WKDownload to prevent delegate from being released
+        private var activeDownloads: [WKDownload] = []
+        // Store KVO observations for download progress
+        private var progressObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
+
         @available(macOS 11.3, *)
         func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
             download.delegate = self
+            activeDownloads.append(download)
         }
 
         @available(macOS 11.3, *)
         func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
             download.delegate = self
+            activeDownloads.append(download)
         }
 
         // Store mapping from WKDownload to our tracking ID
         private var wkDownloadIds: [ObjectIdentifier: UUID] = [:]
+
+        /// Setup KVO observation for WKDownload progress
+        @available(macOS 11.3, *)
+        private func observeDownloadProgress(_ download: WKDownload, trackingId: UUID) {
+            let downloadKey = ObjectIdentifier(download)
+
+            // Observe fractionCompleted which updates as download progresses
+            let observation = download.progress.observe(\.fractionCompleted, options: [.new]) { progress, _ in
+                let downloaded = progress.completedUnitCount
+                let total = progress.totalUnitCount > 0 ? progress.totalUnitCount : nil
+                DownloadManager.shared.updateProgress(for: trackingId, downloadedSize: downloaded, totalSize: total)
+            }
+
+            progressObservations[downloadKey] = observation
+        }
+
+        /// Remove KVO observation for a download
+        @available(macOS 11.3, *)
+        private func removeDownloadObservation(_ download: WKDownload) {
+            let downloadKey = ObjectIdentifier(download)
+            progressObservations.removeValue(forKey: downloadKey)
+        }
 
         @available(macOS 11.3, *)
         func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
@@ -637,17 +666,18 @@ struct WebViewContainer: NSViewRepresentable {
 
                 savePanel.begin { [weak self] panelResponse in
                     if panelResponse == .OK, let url = savePanel.url {
-                        // Track download in DownloadManager synchronously on main thread
+                        // Track download in DownloadManager BEFORE calling completionHandler
+                        // to ensure tracking ID is set before progress updates
                         if let sourceURL = download.originalRequest?.url {
-                            DispatchQueue.main.async {
-                                let trackingId = DownloadManager.shared.trackDownload(
-                                    url: sourceURL,
-                                    suggestedFilename: suggestedFilename,
-                                    destinationPath: url.path,
-                                    expectedSize: expectedSize
-                                )
-                                self?.wkDownloadIds[ObjectIdentifier(download)] = trackingId
-                            }
+                            let trackingId = DownloadManager.shared.trackDownload(
+                                url: sourceURL,
+                                suggestedFilename: suggestedFilename,
+                                destinationPath: url.path,
+                                expectedSize: expectedSize
+                            )
+                            self?.wkDownloadIds[ObjectIdentifier(download)] = trackingId
+                            // Setup KVO observation for progress
+                            self?.observeDownloadProgress(download, trackingId: trackingId)
                         }
                         completionHandler(url)
                     } else {
@@ -678,6 +708,8 @@ struct WebViewContainer: NSViewRepresentable {
                         expectedSize: expectedSize
                     )
                     self.wkDownloadIds[ObjectIdentifier(download)] = trackingId
+                    // Setup KVO observation for progress
+                    self.observeDownloadProgress(download, trackingId: trackingId)
                 }
 
                 completionHandler(destinationURL)
@@ -685,37 +717,25 @@ struct WebViewContainer: NSViewRepresentable {
         }
 
         @available(macOS 11.3, *)
-        func download(_ download: WKDownload, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-            // Update progress in DownloadManager
-            let downloadKey = ObjectIdentifier(download)
-            Task { @MainActor in
-                if let trackingId = self.wkDownloadIds[downloadKey] {
-                    let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
-                    DownloadManager.shared.updateProgress(for: trackingId, downloadedSize: totalBytesWritten, totalSize: total)
-                }
-            }
-        }
-
-        @available(macOS 11.3, *)
         func downloadDidFinish(_ download: WKDownload) {
             let downloadKey = ObjectIdentifier(download)
-            Task { @MainActor in
-                if let trackingId = self.wkDownloadIds[downloadKey] {
-                    DownloadManager.shared.completeWKDownload(for: trackingId)
-                    self.wkDownloadIds.removeValue(forKey: downloadKey)
-                }
+            if let trackingId = self.wkDownloadIds[downloadKey] {
+                DownloadManager.shared.completeWKDownload(for: trackingId)
+                self.wkDownloadIds.removeValue(forKey: downloadKey)
             }
+            removeDownloadObservation(download)
+            activeDownloads.removeAll { $0 === download }
         }
 
         @available(macOS 11.3, *)
         func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
             let downloadKey = ObjectIdentifier(download)
-            Task { @MainActor in
-                if let trackingId = self.wkDownloadIds[downloadKey] {
-                    DownloadManager.shared.failDownload(for: trackingId, error: error)
-                    self.wkDownloadIds.removeValue(forKey: downloadKey)
-                }
+            if let trackingId = self.wkDownloadIds[downloadKey] {
+                DownloadManager.shared.failDownload(for: trackingId, error: error)
+                self.wkDownloadIds.removeValue(forKey: downloadKey)
             }
+            removeDownloadObservation(download)
+            activeDownloads.removeAll { $0 === download }
         }
     }
 }
