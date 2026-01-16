@@ -47,6 +47,15 @@ struct WebViewContainer: NSViewRepresentable {
     private let settings = BrowserSettings.shared
 
     func makeNSView(context: Context) -> WKWebView {
+        // Check if we already have a WebView for this tab (e.g., after tab reordering)
+        // This prevents WebView recreation when SwiftUI re-evaluates the view hierarchy
+        if let existingWebView = viewModel.getWebView(for: tabId) {
+            context.coordinator.webView = existingWebView
+            // Re-setup observers in case they were lost
+            context.coordinator.setupObservers(for: existingWebView)
+            return existingWebView
+        }
+
         let configuration = WKWebViewConfiguration()
 
         // Apply JavaScript setting
@@ -116,9 +125,7 @@ struct WebViewContainer: NSViewRepresentable {
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15"
 
         // Register with ViewModel
-        Task { @MainActor in
-            viewModel.registerWebView(webView, for: tabId)
-        }
+        viewModel.registerWebView(webView, for: tabId)
 
         // Add KVO observers for title and URL changes
         context.coordinator.setupObservers(for: webView)
