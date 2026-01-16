@@ -88,16 +88,22 @@ class WindowManager {
         } else {
             NSLog("✅ WindowManager: Successfully detached tab")
 
-            // If this was the last tab, close the source window after a brief delay
-            // to allow the current drag operation to complete
+            // If this was the last tab, close the source window after a delay
+            // to allow the current drag operation to fully complete
             if isLastTab {
                 NSLog("🚪 WindowManager: Will close empty window #\(windowNumber)")
-                // Use DispatchQueue to delay the close operation, avoiding crash during drag operation
-                DispatchQueue.main.async {
+                // Use a longer delay to ensure drag operation completes before closing
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    NSLog("🚪 WindowManager: Attempting to close window #\(windowNumber)")
+                    NSLog("🚪 WindowManager: All windows: \(NSApp.windows.map { $0.windowNumber })")
                     // Find window from all app windows, not just our tracked windows array
                     if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
+                        NSLog("🚪 WindowManager: Found window, closing it")
                         window.close()
+                    } else {
+                        NSLog("🚪 WindowManager: Window #\(windowNumber) not found in NSApp.windows")
                     }
+                    _ = self // Keep reference to avoid warning
                 }
             }
         }
