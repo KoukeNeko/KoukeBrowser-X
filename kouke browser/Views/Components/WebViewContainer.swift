@@ -157,6 +157,9 @@ struct WebViewContainer: NSViewRepresentable {
         weak var webView: WKWebView?
         private var pendingNavigationHost: String?
         private var hasCapturedCertificate = false
+        
+        // Track popup -> opener tab relationship for proper focus restoration
+        private var popupOpenerMap: [ObjectIdentifier: UUID] = [:]
 
         init(_ parent: WebViewContainer) {
             self.parent = parent
@@ -578,6 +581,10 @@ struct WebViewContainer: NSViewRepresentable {
             }
             // If parent doesn't have custom UA, let WKWebView use its default
             
+            // Remember the opener tab to restore focus when popup closes
+            let openerTabId = self.parent.tabId
+            self.popupOpenerMap[ObjectIdentifier(popupWebView)] = openerTabId
+            
             // Create a new tab for the popup and register the WebView
             Task { @MainActor in
                 let url = navigationAction.request.url?.absoluteString ?? "about:blank"
@@ -589,6 +596,32 @@ struct WebViewContainer: NSViewRepresentable {
             }
             
             return popupWebView
+        }
+        
+        /// Called when JavaScript calls window.close()
+        /// This is essential for OAuth flows where the popup closes itself after completion
+        func webViewDidClose(_ webView: WKWebView) {
+            let webViewId = ObjectIdentifier(webView)
+            let openerTabId = self.popupOpenerMap[webViewId]
+            
+            // Clean up the mapping
+            self.popupOpenerMap.removeValue(forKey: webViewId)
+            
+            Task { @MainActor in
+                // Find the tab associated with this webView and close it
+                for tab in self.parent.viewModel.tabs {
+                    if self.parent.viewModel.getWebView(for: tab.id) === webView {
+                        self.parent.viewModel.closeTab(tab.id)
+                        break
+                    }
+                }
+                
+                // Switch focus back to the opener tab
+                if let openerTabId = openerTabId,
+                   self.parent.viewModel.tabs.contains(where: { $0.id == openerTabId }) {
+                    self.parent.viewModel.switchToTab(openerTabId)
+                }
+            }
         }
 
         // MARK: - WKDownloadDelegate
