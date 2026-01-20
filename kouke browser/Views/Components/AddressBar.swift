@@ -78,7 +78,7 @@ struct AddressBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) { // URL 區域已有 .padding(.horizontal, 12) 作為間距
             // Navigation controls
             HStack(spacing: 4) {
                 NavButton(
@@ -93,6 +93,7 @@ struct AddressBar: View {
                 )
                 NavButton(icon: "arrow.clockwise", action: viewModel.reload)
             }
+            .frame(height: 28)
 
             // Address input container with Safari-style dropdown
             AddressInputContainer(
@@ -104,9 +105,12 @@ struct AddressBar: View {
             )
 
             // Toolbar buttons in custom order
-            ForEach(settings.toolbarButtonOrder) { button in
-                toolbarButton(for: button)
+            HStack(spacing: 0) {
+                ForEach(settings.toolbarButtonOrder) { button in
+                    toolbarButton(for: button)
+                }
             }
+            .frame(height: 28)
         }
         .padding(.horizontal, 6)
         .frame(height: 40)
@@ -404,7 +408,7 @@ struct AddressInputContainer: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .frame(height: 28)
         // 追蹤 address bar 的 frame，用於設定 dropdown popover 寬度
         .background(
             GeometryReader { geo in
