@@ -17,9 +17,9 @@ struct AddressBarDropdownView: View {
 
     @ObservedObject var bookmarkManager = BookmarkManager.shared
 
-    // 計算剛好容納 6 個 icon 的寬度
-    // 6 icons × 56px + 5 gaps × 12px + padding 40px = 436px
-    private let favoritesWidth: CGFloat = 436
+    // 計算剛好容納 6 個 icon 的寬度（與 StartPage 一致，spacing: 16）
+    // 6 icons × 56px + 5 gaps × 16px + padding 40px = 456px
+    private let favoritesWidth: CGFloat = 456
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,7 +54,7 @@ struct AddressBarDropdownView: View {
 
             if hasContent {
                 // Grid of folders and bookmarks (6 per row, using shared components from StartPage)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 6), spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 6), spacing: 16) {
                     // Folders first
                     ForEach(currentFolders.prefix(8)) { folder in
                         FolderButton(
