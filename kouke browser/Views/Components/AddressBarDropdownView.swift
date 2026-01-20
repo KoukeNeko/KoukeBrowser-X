@@ -49,24 +49,32 @@ struct AddressBarDropdownView: View {
                 .padding(.top, 16)
 
             if hasContent {
-                // Grid of folders and bookmarks
+                // Grid of folders and bookmarks (using shared components from StartPage)
                 LazyVGrid(columns: [
                     GridItem(.adaptive(minimum: 72, maximum: 88), spacing: 16)
                 ], spacing: 16) {
                     // Folders first
                     ForEach(currentFolders.prefix(8)) { folder in
-                        DropdownFolderButton(
+                        FolderButton(
                             folder: folder,
                             bookmarkManager: bookmarkManager,
-                            onNavigate: onNavigate
+                            action: {
+                                // Navigate to first bookmark in folder
+                                if let first = bookmarkManager.bookmarks(in: folder.id).first {
+                                    onNavigate(first.url)
+                                }
+                            },
+                            size: 56
                         )
                     }
 
                     // Then bookmarks
                     ForEach(currentBookmarks.prefix(max(0, 8 - currentFolders.count))) { bookmark in
-                        DropdownBookmarkButton(bookmark: bookmark) {
-                            onNavigate(bookmark.url)
-                        }
+                        BookmarkButton(
+                            bookmark: bookmark,
+                            action: { onNavigate(bookmark.url) },
+                            size: 56
+                        )
                     }
                 }
                 .padding(.horizontal, 20)
@@ -311,161 +319,6 @@ struct SuggestionRowView: View {
             return Color.accentColor.opacity(isHovering ? 0.9 : 0.8)
         }
         return isHovering ? Color("AccentHover") : Color.clear
-    }
-}
-
-// MARK: - Dropdown Folder Button
-
-struct DropdownFolderButton: View {
-    let folder: BookmarkFolder
-    let bookmarkManager: BookmarkManager
-    let onNavigate: (String) -> Void
-
-    @State private var isHovering = false
-
-    private var bookmarksInFolder: [Bookmark] {
-        bookmarkManager.bookmarks(in: folder.id)
-    }
-
-    var body: some View {
-        Button(action: {
-            // Navigate to first bookmark in folder if exists
-            if let first = bookmarksInFolder.first {
-                onNavigate(first.url)
-            }
-        }) {
-            VStack(spacing: 6) {
-                ZStack {
-                    Rectangle()
-                        .fill(Color("CardBg"))
-                        .border(Color("Border"), width: 1)
-
-                    if bookmarksInFolder.isEmpty {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.yellow)
-                    } else {
-                        // Mini favicon collage
-                        DropdownFaviconCollage(bookmarks: Array(bookmarksInFolder.prefix(4)))
-                    }
-                }
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .scaleEffect(isHovering ? 1.03 : 1.0)
-                .animation(.easeInOut(duration: 0.1), value: isHovering)
-
-                Text(folder.name)
-                    .font(.system(size: 10))
-                    .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(width: 60)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-    }
-}
-
-// MARK: - Dropdown Favicon Collage
-
-struct DropdownFaviconCollage: View {
-    let bookmarks: [Bookmark]
-
-    private var gridSize: Int {
-        if bookmarks.count >= 4 { return 2 }
-        return 1
-    }
-
-    private var cellSize: CGFloat {
-        56.0 / CGFloat(gridSize)
-    }
-
-    var body: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.fixed(cellSize), spacing: 0), count: gridSize),
-            spacing: 0
-        ) {
-            ForEach(0..<(gridSize * gridSize), id: \.self) { index in
-                if index < bookmarks.count {
-                    AsyncImage(url: bookmarks[index].faviconURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: cellSize, height: cellSize)
-                                .clipped()
-                        default:
-                            Rectangle()
-                                .fill(Color("TabInactive"))
-                                .frame(width: cellSize, height: cellSize)
-                        }
-                    }
-                } else {
-                    Rectangle()
-                        .fill(Color("TabInactive"))
-                        .frame(width: cellSize, height: cellSize)
-                }
-            }
-        }
-        .frame(width: 56, height: 56)
-    }
-}
-
-// MARK: - Dropdown Bookmark Button
-
-struct DropdownBookmarkButton: View {
-    let bookmark: Bookmark
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    Rectangle()
-                        .fill(Color("CardBg"))
-                        .border(Color("Border"), width: 1)
-
-                    AsyncImage(url: bookmark.faviconURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 56, height: 56)
-                                .clipped()
-                        case .failure:
-                            Image(systemName: "globe")
-                                .font(.system(size: 20))
-                                .foregroundColor(Color("TextMuted"))
-                        case .empty:
-                            ProgressView()
-                                .scaleEffect(0.5)
-                        @unknown default:
-                            Image(systemName: "globe")
-                                .font(.system(size: 20))
-                                .foregroundColor(Color("TextMuted"))
-                        }
-                    }
-                }
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .scaleEffect(isHovering ? 1.03 : 1.0)
-                .animation(.easeInOut(duration: 0.1), value: isHovering)
-
-                Text(bookmark.title)
-                    .font(.system(size: 10))
-                    .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(width: 60)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
     }
 }
 

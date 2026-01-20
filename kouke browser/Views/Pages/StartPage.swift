@@ -54,10 +54,8 @@ struct StartPage: View {
                         }
                         .frame(height: 24) // Fixed height for consistency
 
-                        // Grid of folders and bookmarks
-                        LazyVGrid(columns: [
-                            GridItem(.adaptive(minimum: 80, maximum: 100), spacing: 16)
-                        ], spacing: 16) {
+                        // Grid of folders and bookmarks (6 per row)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 6), spacing: 16) {
                             // Folders first
                             ForEach(currentFolders) { folder in
                                 FolderButton(
@@ -121,6 +119,7 @@ struct FolderButton: View {
     let folder: BookmarkFolder
     let bookmarkManager: BookmarkManager
     let action: () -> Void
+    var size: CGFloat = 64
     @ObservedObject private var faviconService = FaviconService.shared
 
     @State private var isHovering = false
@@ -129,10 +128,26 @@ struct FolderButton: View {
         bookmarkManager.bookmarks(in: folder.id)
     }
 
+    private var maxFavicons: Int {
+        size >= 64 ? 9 : 4
+    }
+
+    private var iconFontSize: CGFloat {
+        size >= 64 ? 28 : 24
+    }
+
+    private var titleFontSize: CGFloat {
+        size >= 64 ? 11 : 10
+    }
+
+    private var spacing: CGFloat {
+        size >= 64 ? 8 : 6
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                // Folder icon container with 3x3 favicon grid
+            VStack(spacing: spacing) {
+                // Folder icon container with favicon grid
                 ZStack {
                     Rectangle()
                         .fill(Color("CardBg"))
@@ -141,24 +156,25 @@ struct FolderButton: View {
                     if bookmarksInFolder.isEmpty {
                         // Empty folder icon
                         Image(systemName: "folder.fill")
-                            .font(.system(size: 28))
+                            .font(.system(size: iconFontSize))
                             .foregroundColor(.yellow)
                     } else {
-                        // 3x3 grid of favicons
-                        FaviconCollage(bookmarks: Array(bookmarksInFolder.prefix(9)))
+                        // Grid of favicons
+                        FaviconCollage(bookmarks: Array(bookmarksInFolder.prefix(maxFavicons)), size: size)
                     }
                 }
-                .frame(width: 64, height: 64)
+                .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .scaleEffect(isHovering ? 1.02 : 1.0)
                 .animation(.easeInOut(duration: 0.1), value: isHovering)
 
                 // Title
                 Text(folder.name)
-                    .font(.system(size: 11))
+                    .font(.system(size: titleFontSize))
                     .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .frame(width: size - 4)
             }
         }
         .buttonStyle(.plain)
@@ -168,21 +184,32 @@ struct FolderButton: View {
     }
 }
 
-// MARK: - Favicon Collage (3x3 Grid)
+// MARK: - Favicon Collage (Configurable Grid)
 
 struct FaviconCollage: View {
     let bookmarks: [Bookmark]
+    var size: CGFloat = 64
     @ObservedObject private var faviconService = FaviconService.shared
 
     private var gridSize: Int {
-        // Determine grid size based on bookmark count
-        if bookmarks.count >= 9 { return 3 }
-        if bookmarks.count >= 4 { return 2 }
-        return 1
+        // Determine grid size based on bookmark count and container size
+        if size >= 64 {
+            if bookmarks.count >= 9 { return 3 }
+            if bookmarks.count >= 4 { return 2 }
+            return 1
+        } else {
+            // Smaller size: max 2x2 grid
+            if bookmarks.count >= 4 { return 2 }
+            return 1
+        }
     }
 
     private var cellSize: CGFloat {
-        64.0 / CGFloat(gridSize)
+        size / CGFloat(gridSize)
+    }
+
+    private var globeIconSize: CGFloat {
+        size >= 64 ? 24 : 20
     }
 
     var body: some View {
@@ -192,7 +219,6 @@ struct FaviconCollage: View {
         ) {
             ForEach(0..<(gridSize * gridSize), id: \.self) { index in
                 if index < bookmarks.count {
-                    // Use a key to force refresh when URL changes in cache
                     AsyncImage(url: bookmarks[index].faviconURL) { phase in
                         switch phase {
                         case .success(let image):
@@ -204,7 +230,7 @@ struct FaviconCollage: View {
                         case .failure:
                              if gridSize == 1 {
                                  Image(systemName: "globe")
-                                     .font(.system(size: 24))
+                                     .font(.system(size: globeIconSize))
                                      .foregroundColor(Color("TextMuted"))
                                      .frame(width: cellSize, height: cellSize)
                              } else {
@@ -222,7 +248,7 @@ struct FaviconCollage: View {
                                 .frame(width: cellSize, height: cellSize)
                         }
                     }
-                    .id(bookmarks[index].faviconURL) // Force refresh when URL changes
+                    .id(bookmarks[index].faviconURL)
                 } else {
                     Rectangle()
                         .fill(Color("TabInactive"))
@@ -230,7 +256,7 @@ struct FaviconCollage: View {
                 }
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: size, height: size)
     }
 }
 
@@ -239,13 +265,30 @@ struct FaviconCollage: View {
 struct BookmarkButton: View {
     let bookmark: Bookmark
     let action: () -> Void
+    var size: CGFloat = 64
     @ObservedObject private var faviconService = FaviconService.shared
 
     @State private var isHovering = false
 
+    private var iconFontSize: CGFloat {
+        size >= 64 ? 24 : 20
+    }
+
+    private var titleFontSize: CGFloat {
+        size >= 64 ? 11 : 10
+    }
+
+    private var spacing: CGFloat {
+        size >= 64 ? 8 : 6
+    }
+
+    private var progressScale: CGFloat {
+        size >= 64 ? 0.6 : 0.5
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: spacing) {
                 // Icon container with favicon
                 ZStack {
                     Rectangle()
@@ -258,34 +301,35 @@ struct BookmarkButton: View {
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 64, height: 64)
+                                .frame(width: size, height: size)
                                 .clipped()
                         case .failure:
                             Image(systemName: "globe")
-                                .font(.system(size: 24))
+                                .font(.system(size: iconFontSize))
                                 .foregroundColor(Color("TextMuted"))
                         case .empty:
                             ProgressView()
-                                .scaleEffect(0.6)
+                                .scaleEffect(progressScale)
                         @unknown default:
                             Image(systemName: "globe")
-                                .font(.system(size: 24))
+                                .font(.system(size: iconFontSize))
                                 .foregroundColor(Color("TextMuted"))
                         }
                     }
-                    .id(bookmark.faviconURL) // Force refresh when URL changes
+                    .id(bookmark.faviconURL)
                 }
-                .frame(width: 64, height: 64)
+                .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .scaleEffect(isHovering ? 1.02 : 1.0)
                 .animation(.easeInOut(duration: 0.1), value: isHovering)
 
                 // Title
                 Text(bookmark.title)
-                    .font(.system(size: 11))
+                    .font(.system(size: titleFontSize))
                     .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .frame(width: size - 4)
             }
         }
         .buttonStyle(.plain)
