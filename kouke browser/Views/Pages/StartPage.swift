@@ -112,9 +112,9 @@ struct StartPage: View {
                         horizontalPadding: config.horizontalPadding
                     )
                     .padding(.top, 16)
-                    .padding(.bottom, 16)
                 }
             }
+            .padding(.bottom, config.horizontalPadding)
         }
     }
 
@@ -142,7 +142,7 @@ struct StartPage: View {
                         .kerning(0.5)
                 }
                 .padding(.horizontal, config.horizontalPadding)
-                .padding(.top, useScrollView ? 0 : 16)
+                .padding(.top, useScrollView ? 0 : config.horizontalPadding)
                 .frame(height: 24)  // 固定高度確保一致性
 
                 // 使用共用的 FavoritesGridView
@@ -173,8 +173,8 @@ struct StartPage: View {
                     .foregroundColor(Color("TextMuted").opacity(0.7))
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, useScrollView ? 100 : 20)
-            .padding(.bottom, useScrollView ? 0 : 20)
+            .padding(.top, useScrollView ? 100 : config.horizontalPadding)
+            .padding(.bottom, useScrollView ? 0 : config.horizontalPadding)
         }
     }
 
