@@ -137,6 +137,11 @@ class BrowserViewModel: ObservableObject {
     }
 
     func closeTab(_ id: UUID) {
+        // Save tab to recently closed list before closing
+        if let tab = tabs.first(where: { $0.id == id }) {
+            RecentlyClosedTabsManager.shared.addClosedTab(tab)
+        }
+
         // If this is the last tab, close window directly without dialog
         if tabs.count == 1 {
             // Clean up first

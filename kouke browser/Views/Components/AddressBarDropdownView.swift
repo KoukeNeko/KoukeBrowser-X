@@ -32,11 +32,12 @@ struct AddressBarDropdownView: View {
 
     @ViewBuilder
     private var favoritesSection: some View {
-        // 直接使用 StartPage（compact 模式）
+        // 直接使用 StartPage（下拉選單模式）
         StartPage(
             onNavigate: onNavigate,
             config: .dropdown,
-            isCompact: true
+            useScrollView: false,
+            maxRecentlyClosedTabs: 6
         )
         .frame(minHeight: 500, alignment: .top)  // 最小高度，頂部對齊
     }
