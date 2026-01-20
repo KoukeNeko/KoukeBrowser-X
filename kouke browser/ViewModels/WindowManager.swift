@@ -338,7 +338,7 @@ struct BrowserViewForWindow: View {
             ForEach(viewModel.tabs) { tab in
                 Group {
                     if tab.isSpecialPage {
-                        KoukePageView(url: tab.url, onNavigate: viewModel.navigateFromStartPage)
+                        KoukePageView(url: tab.url, onNavigate: viewModel.navigateFromStartPage, viewModel: viewModel)
                     } else {
                         WebViewContainer(tabId: tab.id, url: tab.url, viewModel: viewModel)
                     }

@@ -121,7 +121,8 @@ struct BrowserView: View {
                     if tab.isSpecialPage {
                         KoukePageView(
                             url: tab.url,
-                            onNavigate: viewModel.navigateFromStartPage
+                            onNavigate: viewModel.navigateFromStartPage,
+                            viewModel: viewModel
                         )
                     } else if tab.isReaderMode, let article = viewModel.readerArticle, tab.id == viewModel.activeTabId {
                         ReaderModeView(

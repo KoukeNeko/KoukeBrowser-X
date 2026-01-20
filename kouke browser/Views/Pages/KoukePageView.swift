@@ -10,6 +10,7 @@ import SwiftUI
 struct KoukePageView: View {
     let url: String
     let onNavigate: (String) -> Void
+    var viewModel: BrowserViewModel?
 
     var body: some View {
         switch url {
@@ -26,13 +27,32 @@ struct KoukePageView: View {
             HelpPageView()
 
         default:
-            // Handle kouke:// URLs (like view-source) - let WebView handle them
-            if url.hasPrefix("kouke://") {
+            // Handle kouke:// URLs (like view-source)
+            if url.hasPrefix("kouke://source/") {
+                if let vm = viewModel,
+                   let sourceContent = vm.pageSourceContent,
+                   let sourceURL = vm.pageSourceURL {
+                    SourcePageView(sourceContent: sourceContent, sourceURL: sourceURL)
+                } else {
+                    loadingSourceView
+                }
+            } else if url.hasPrefix("kouke://") {
                 Color.clear
             } else {
                 unknownPageView
             }
         }
+    }
+
+    private var loadingSourceView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+            Text("Loading source...")
+                .font(.system(size: 14))
+                .foregroundColor(Color("TextMuted"))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color("Bg"))
     }
 
     private var unknownPageView: some View {

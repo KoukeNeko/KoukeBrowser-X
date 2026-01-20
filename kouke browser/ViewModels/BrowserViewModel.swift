@@ -23,6 +23,10 @@ class BrowserViewModel: ObservableObject {
     @Published var pendingUserScriptContent: String?
     @Published var pendingUserScriptMetadata: UserScriptManager.UserScriptMetadata?
 
+    // Page source viewer state
+    @Published var pageSourceContent: String?
+    @Published var pageSourceURL: String?
+
     // WebView instances managed separately
     private var webViews: [UUID: WKWebView] = [:]
 
