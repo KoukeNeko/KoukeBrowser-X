@@ -34,13 +34,13 @@ struct FavoritesGridConfig {
         isAdaptive: true
     )
 
-    /// AddressBar Dropdown 預設配置（自適應寬度）
+    /// AddressBar Dropdown 預設配置（與 StartPage 統一樣式）
     static let dropdown = FavoritesGridConfig(
-        iconSize: 56,
+        iconSize: 64,
         spacing: 16,
         columns: 6,
         maxItems: 6,
-        horizontalPadding: 20,
+        horizontalPadding: 32,
         isAdaptive: true
     )
 }
