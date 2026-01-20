@@ -308,12 +308,20 @@ struct AddressBar: View {
 
 struct AddressInputContainer: View {
     @ObservedObject var viewModel: BrowserViewModel
+    @ObservedObject var suggestionService = SuggestionService.shared
     let securityIcon: String
     let securityIconColor: Color
     @Binding var showingSecurityInfo: Bool
     @Binding var showingDropdown: Bool
 
     @State private var addressBarFrame: CGRect = .zero
+    @State private var isTyping = false
+    @State private var lastInputURL = ""
+
+    private var showFavorites: Bool {
+        // 顯示收藏夾：未輸入任何東西，或剛獲得焦點還沒開始打字
+        !isTyping || viewModel.inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -337,20 +345,56 @@ struct AddressInputContainer: View {
                 placeholder: "Search or enter website",
                 onSubmit: {
                     showingDropdown = false
+                    isTyping = false
+                    suggestionService.cancelSearch()
                     viewModel.navigate()
                 },
                 onFocus: {
+                    lastInputURL = viewModel.inputURL
+                    isTyping = false
                     showingDropdown = true
                 },
                 onBlur: {
                     // Delay closing to allow clicking on dropdown items
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         showingDropdown = false
+                        isTyping = false
+                        suggestionService.cancelSearch()
                     }
                 }
             )
             .font(.system(size: 13, design: .monospaced))
             .foregroundColor(Color("TextMuted"))
+            .onChange(of: viewModel.inputURL) { oldValue, newValue in
+                // 只有當下拉選單顯示時才檢測輸入
+                if showingDropdown {
+                    // 檢測是否正在輸入（URL 有改變且不是初始載入）
+                    if newValue != oldValue && isTyping == false {
+                        // 首次輸入：用戶開始打字
+                        isTyping = true
+                    }
+
+                    if isTyping {
+                        // 更新建議
+                        suggestionService.updateSuggestions(
+                            query: newValue,
+                            currentTab: viewModel.activeTab,
+                            allTabs: viewModel.tabs,
+                            activeTabId: viewModel.activeTabId
+                        )
+                    }
+                }
+            }
+            .onChange(of: viewModel.activeTabId) { _, _ in
+                // 當分頁切換時，關閉下拉選單並重置輸入狀態
+                showingDropdown = false
+                isTyping = false
+                suggestionService.cancelSearch()
+                // 強制取消焦點，讓 text field 能更新顯示的 URL
+                DispatchQueue.main.async {
+                    NSApp.keyWindow?.makeFirstResponder(nil)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -372,23 +416,26 @@ struct AddressInputContainer: View {
         )
         .popover(isPresented: $showingDropdown, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             AddressBarDropdownView(
-                suggestions: [],
-                showFavorites: true,  // Always show favorites when dropdown opens
+                suggestions: suggestionService.suggestions,
+                showFavorites: showFavorites,
                 onSelect: { item in
                     if let url = item.url {
                         viewModel.inputURL = url
                         showingDropdown = false
+                        isTyping = false
                         viewModel.navigate()
                     }
                 },
                 onNavigate: { url in
                     viewModel.inputURL = url
                     showingDropdown = false
+                    isTyping = false
                     viewModel.navigate()
                 },
                 onSwitchTab: { tabId in
                     viewModel.switchToTab(tabId)
                     showingDropdown = false
+                    isTyping = false
                 }
             )
             .environmentObject(viewModel)
