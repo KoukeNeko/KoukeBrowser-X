@@ -563,12 +563,32 @@ struct WebViewContainer: NSViewRepresentable {
         // MARK: - WKUIDelegate
 
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            if let url = navigationAction.request.url?.absoluteString {
-                Task { @MainActor in
-                    self.parent.viewModel.addTabWithURL(url)
-                }
+            // Use the provided configuration to maintain window.opener relationship
+            // This is critical for OAuth flows that use postMessage to communicate back
+            let popupWebView = WKWebView(frame: .zero, configuration: configuration)
+            popupWebView.navigationDelegate = self
+            popupWebView.uiDelegate = self
+            
+            // Enable developer extras for the popup as well
+            popupWebView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
+            
+            // Inherit User-Agent from parent webview for consistency
+            if let parentUserAgent = webView.customUserAgent, !parentUserAgent.isEmpty {
+                popupWebView.customUserAgent = parentUserAgent
             }
-            return nil
+            // If parent doesn't have custom UA, let WKWebView use its default
+            
+            // Create a new tab for the popup and register the WebView
+            Task { @MainActor in
+                let url = navigationAction.request.url?.absoluteString ?? "about:blank"
+                let title = navigationAction.request.url?.host ?? "Popup"
+                let newTab = Tab(title: title, url: url, isLoading: true)
+                self.parent.viewModel.tabs.append(newTab)
+                self.parent.viewModel.registerWebView(popupWebView, for: newTab.id)
+                self.parent.viewModel.switchToTab(newTab.id)
+            }
+            
+            return popupWebView
         }
 
         // MARK: - WKDownloadDelegate
