@@ -46,6 +46,12 @@ class AutoSelectTextField: NSTextField {
             }
         }
     }
+
+    override func textDidEndEditing(_ notification: Notification) {
+        super.textDidEndEditing(notification)
+        // 確保失去焦點時取消全選
+        onResignFirstResponder?()
+    }
 }
 
 /// A TextField that automatically selects all text when it gains focus
@@ -74,6 +80,10 @@ struct SelectableTextField: NSViewRepresentable {
         textField.onBecomeFirstResponder = {
             coordinator.parent.onFocus?()
         }
+        textField.onResignFirstResponder = {
+            // 失去焦點時強制取消選取狀態
+            textField.window?.makeFirstResponder(nil)
+        }
         textField.onMouseDown = {
             coordinator.parent.onMouseDown?()
         }
@@ -90,6 +100,10 @@ struct SelectableTextField: NSViewRepresentable {
         let coordinator = context.coordinator
         nsView.onBecomeFirstResponder = {
             coordinator.parent.onFocus?()
+        }
+        nsView.onResignFirstResponder = {
+            // 失去焦點時強制取消選取狀態
+            nsView.window?.makeFirstResponder(nil)
         }
         nsView.onMouseDown = {
             coordinator.parent.onMouseDown?()

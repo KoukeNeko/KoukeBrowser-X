@@ -406,6 +406,14 @@ struct AddressInputContainer: View {
                     NSApp.keyWindow?.makeFirstResponder(nil)
                 }
             }
+            .onChange(of: showingDropdown) { oldValue, newValue in
+                // 當下拉選單關閉時，確保取消文字選取狀態
+                if oldValue && !newValue {
+                    DispatchQueue.main.async {
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    }
+                }
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: 28)
