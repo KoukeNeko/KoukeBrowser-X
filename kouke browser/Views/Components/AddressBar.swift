@@ -373,7 +373,7 @@ struct AddressInputContainer: View {
         .popover(isPresented: $showingDropdown, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             AddressBarDropdownView(
                 suggestions: [],
-                showFavorites: viewModel.inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                showFavorites: true,  // Always show favorites when dropdown opens
                 onSelect: { item in
                     if let url = item.url {
                         viewModel.inputURL = url

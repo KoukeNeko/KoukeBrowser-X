@@ -24,32 +24,33 @@ struct AddressBarDropdownView: View {
                 suggestionsSection
             }
         }
-        .frame(width: 500, alignment: .top)
-        .frame(minHeight: 120)
+        .frame(width: 480)
         .background(Color("Bg"))
     }
-    
+
     // MARK: - Favorites Section
 
+    @ViewBuilder
     private var favoritesSection: some View {
         let currentFolders = bookmarkManager.folders(in: nil)
         let currentBookmarks = bookmarkManager.bookmarks(in: nil)
+        let hasContent = !currentBookmarks.isEmpty || !currentFolders.isEmpty
 
-        return VStack(alignment: .leading, spacing: 16) {
-            if !currentBookmarks.isEmpty || !currentFolders.isEmpty {
-                // Header
-                Text("收藏夾")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color("TextMuted"))
-                    .textCase(.uppercase)
-                    .kerning(0.5)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            Text("收藏夾")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color("TextMuted"))
+                .textCase(.uppercase)
+                .kerning(0.5)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
-                // Grid of folders and bookmarks (reuse StartPage style)
+            if hasContent {
+                // Grid of folders and bookmarks
                 LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: 72, maximum: 88), spacing: 12)
-                ], spacing: 12) {
+                    GridItem(.adaptive(minimum: 72, maximum: 88), spacing: 16)
+                ], spacing: 16) {
                     // Folders first
                     ForEach(currentFolders.prefix(8)) { folder in
                         DropdownFolderButton(
@@ -60,14 +61,14 @@ struct AddressBarDropdownView: View {
                     }
 
                     // Then bookmarks
-                    ForEach(currentBookmarks.prefix(8 - currentFolders.count)) { bookmark in
+                    ForEach(currentBookmarks.prefix(max(0, 8 - currentFolders.count))) { bookmark in
                         DropdownBookmarkButton(bookmark: bookmark) {
                             onNavigate(bookmark.url)
                         }
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                .padding(.bottom, 20)
             } else {
                 // Empty state
                 VStack(spacing: 12) {
@@ -84,9 +85,10 @@ struct AddressBarDropdownView: View {
                         .foregroundColor(Color("TextMuted").opacity(0.7))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
+                .frame(height: 120)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     // MARK: - Suggestions Section
