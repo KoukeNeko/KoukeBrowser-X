@@ -87,8 +87,8 @@ struct StartPage: View {
                 .padding(.horizontal, config.horizontalPadding)
                 .padding(.bottom, isCompact ? 20 : 0)
             }
-            .frame(maxWidth: isCompact ? .infinity : 1200, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: isCompact ? nil : 1200, alignment: .leading)
+            .frame(maxWidth: isCompact ? nil : .infinity)
         } else {
             // Empty state
             VStack(spacing: isCompact ? 12 : 16) {

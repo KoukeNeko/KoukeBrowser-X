@@ -15,10 +15,6 @@ struct AddressBarDropdownView: View {
     let onSwitchTab: (UUID) -> Void
     var width: CGFloat? = nil
 
-    // 使用共用配置計算寬度
-    private let gridConfig = FavoritesGridConfig.dropdown
-    private var favoritesWidth: CGFloat { gridConfig.totalWidth }
-
     var body: some View {
         VStack(spacing: 0) {
             if showFavorites {
@@ -27,7 +23,7 @@ struct AddressBarDropdownView: View {
                 suggestionsSection
             }
         }
-        .frame(width: showFavorites ? favoritesWidth : (width ?? 400))
+        .frame(width: width ?? 400)
         .fixedSize(horizontal: false, vertical: true)
         .background(Color("Bg"))
     }
