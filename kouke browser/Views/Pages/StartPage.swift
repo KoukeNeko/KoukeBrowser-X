@@ -13,6 +13,8 @@ struct StartPage: View {
     @State private var currentFolderId: UUID? = nil
     @State private var folderPath: [UUID] = []
 
+    private let gridConfig = FavoritesGridConfig.startPage
+
     private var currentFolderName: String {
         if let folderId = currentFolderId,
            let folder = bookmarkManager.folders.first(where: { $0.id == folderId }) {
@@ -21,17 +23,19 @@ struct StartPage: View {
         return "Bookmarks"
     }
 
+    private var hasContent: Bool {
+        let folders = bookmarkManager.folders(in: currentFolderId)
+        let bookmarks = bookmarkManager.bookmarks(in: currentFolderId)
+        return !folders.isEmpty || !bookmarks.isEmpty || currentFolderId != nil
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 0) {
                 Spacer()
                     .frame(height: 80)
 
-                // Bookmarks Section
-                let currentFolders = bookmarkManager.folders(in: currentFolderId)
-                let currentBookmarks = bookmarkManager.bookmarks(in: currentFolderId)
-
-                if !currentBookmarks.isEmpty || !currentFolders.isEmpty || currentFolderId != nil {
+                if hasContent {
                     VStack(alignment: .leading, spacing: 16) {
                         // Header with back button when in folder
                         HStack(spacing: 4) {
@@ -52,30 +56,20 @@ struct StartPage: View {
                                 .textCase(.uppercase)
                                 .kerning(0.5)
                         }
-                        .frame(height: 24) // Fixed height for consistency
+                        .frame(height: 24)
 
-                        // Grid of folders and bookmarks (6 per row)
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 6), spacing: 16) {
-                            // Folders first
-                            ForEach(currentFolders) { folder in
-                                FolderButton(
-                                    folder: folder,
-                                    bookmarkManager: bookmarkManager,
-                                    action: { enterFolder(folder.id) }
-                                )
-                            }
-
-                            // Then bookmarks
-                            ForEach(currentBookmarks.prefix(12 - currentFolders.count)) { bookmark in
-                                BookmarkButton(
-                                    bookmark: bookmark,
-                                    action: { onNavigate(bookmark.url) }
-                                )
-                            }
-                        }
+                        // 使用共用的 FavoritesGridView
+                        FavoritesGridView(
+                            bookmarkManager: bookmarkManager,
+                            folderId: currentFolderId,
+                            config: gridConfig,
+                            onNavigate: onNavigate,
+                            onFolderTap: enterFolder
+                        )
                     }
-                    .padding(.horizontal, 32)
-                    .frame(maxWidth: 600)
+                    .padding(.horizontal, gridConfig.horizontalPadding)
+                    .frame(maxWidth: 1200)  // 限制最大寬度
+                    .frame(maxWidth: .infinity)  // 水平置中
                 } else {
                     // Empty state when no bookmarks exist
                     VStack(spacing: 16) {
