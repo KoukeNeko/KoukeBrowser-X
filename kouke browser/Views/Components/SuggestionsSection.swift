@@ -52,7 +52,8 @@ struct SuggestionsSection: View {
                 emptyState
             } else {
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: cardWidth, maximum: cardWidth), spacing: spacing)],
+                    columns: [GridItem(.adaptive(minimum: cardWidth, maximum: cardWidth), spacing: spacing, alignment: .leading)],
+                    alignment: .leading,
                     spacing: spacing
                 ) {
                     ForEach(suggestions.prefix(maxItems)) { suggestion in
@@ -63,6 +64,7 @@ struct SuggestionsSection: View {
                         )
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, horizontalPadding)
