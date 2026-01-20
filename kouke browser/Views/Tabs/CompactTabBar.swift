@@ -39,25 +39,27 @@ struct CompactTabBar: View {
                 Color.clear
                     .frame(width: 80, height: 40)
 
-                // Navigation buttons (back/forward)
+                // Navigation buttons (back/forward) with history context menu
                 HStack(spacing: 2) {
-                    Button(action: { viewModel.goBack() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(viewModel.activeTab?.canGoBack == true ? Color("Text") : Color("TextMuted").opacity(0.5))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.activeTab?.canGoBack != true)
+                    NavButton(
+                        icon: "chevron.left",
+                        action: { viewModel.goBack() },
+                        isEnabled: viewModel.activeTab?.canGoBack == true,
+                        menuItems: viewModel.getBackHistoryList(),
+                        onMenuItemSelected: { index in
+                            viewModel.goBackTo(index: index)
+                        }
+                    )
 
-                    Button(action: { viewModel.goForward() }) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(viewModel.activeTab?.canGoForward == true ? Color("Text") : Color("TextMuted").opacity(0.5))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.activeTab?.canGoForward != true)
+                    NavButton(
+                        icon: "chevron.right",
+                        action: { viewModel.goForward() },
+                        isEnabled: viewModel.activeTab?.canGoForward == true,
+                        menuItems: viewModel.getForwardHistoryList(),
+                        onMenuItemSelected: { index in
+                            viewModel.goForwardTo(index: index)
+                        }
+                    )
                 }
                 .frame(width: 60)
                 #endif
