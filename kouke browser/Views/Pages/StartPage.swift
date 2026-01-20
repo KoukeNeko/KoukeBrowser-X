@@ -10,9 +10,11 @@ import SwiftUI
 struct StartPage: View {
     var onNavigate: (String) -> Void
     var config: FavoritesGridConfig = .startPage
-    var isCompact: Bool = false  // true = dropdown 模式（無 ScrollView、無頂部空白）
+    var useScrollView: Bool = true  // true = 全頁模式使用 ScrollView，false = 下拉選單不用
+    var maxRecentlyClosedTabs: Int = 20  // 最近關閉分頁的最大顯示數量
 
     @ObservedObject var bookmarkManager = BookmarkManager.shared
+    @ObservedObject var recentlyClosedManager = RecentlyClosedTabsManager.shared
     @State private var currentFolderId: UUID? = nil
     @State private var folderPath: [UUID] = []
 
@@ -21,7 +23,7 @@ struct StartPage: View {
            let folder = bookmarkManager.folders.first(where: { $0.id == folderId }) {
             return folder.name
         }
-        return isCompact ? "收藏夾" : "Bookmarks"
+        return "Bookmarks"
     }
 
     private var hasContent: Bool {
@@ -31,50 +33,90 @@ struct StartPage: View {
     }
 
     var body: some View {
-        if isCompact {
-            // Dropdown 模式：不用 ScrollView
-            contentView
-        } else {
+        if useScrollView {
             // 全頁模式：使用 ScrollView
             ScrollView {
                 VStack(spacing: 0) {
                     Spacer()
                         .frame(height: 80)
                     contentView
+
+                    // 最近關閉的分頁
+                    if !recentlyClosedManager.closedTabs.isEmpty {
+                        RecentlyClosedTabsSection(
+                            closedTabs: Array(recentlyClosedManager.closedTabs.prefix(maxRecentlyClosedTabs)),
+                            onReopen: { tabId in
+                                if let closedTab = recentlyClosedManager.reopenTab(tabId) {
+                                    onNavigate(closedTab.url)
+                                }
+                            },
+                            onClearAll: {
+                                recentlyClosedManager.clearAll()
+                            },
+                            horizontalPadding: config.horizontalPadding
+                        )
+                        .frame(maxWidth: 1200, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 48)
+                    }
+
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(Color("Bg"))
+        } else {
+            // 下拉選單模式：不用 ScrollView
+            VStack(spacing: 0) {
+                contentView
+
+                // 最近關閉的分頁
+                if !recentlyClosedManager.closedTabs.isEmpty {
+                    RecentlyClosedTabsSection(
+                        closedTabs: Array(recentlyClosedManager.closedTabs.prefix(maxRecentlyClosedTabs)),
+                        onReopen: { tabId in
+                            if let closedTab = recentlyClosedManager.reopenTab(tabId) {
+                                onNavigate(closedTab.url)
+                            }
+                        },
+                        onClearAll: {
+                            recentlyClosedManager.clearAll()
+                        },
+                        horizontalPadding: config.horizontalPadding
+                    )
+                    .padding(.top, 16)
+                    .padding(.bottom, 16)
+                }
+            }
         }
     }
 
     @ViewBuilder
     private var contentView: some View {
         if hasContent {
-            VStack(alignment: .leading, spacing: isCompact ? 12 : 16) {
+            VStack(alignment: .leading, spacing: 16) {
                 // Header with back button when in folder
                 HStack(spacing: 4) {
                     if currentFolderId != nil {
                         Button(action: goBack) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: isCompact ? 12 : 14, weight: .medium))
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(Color("TextMuted"))
-                                .frame(width: isCompact ? 20 : 24, height: isCompact ? 20 : 24)
+                                .frame(width: 24, height: 24)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
 
                     Text(currentFolderName)
-                        .font(.system(size: isCompact ? 11 : 12, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color("TextMuted"))
                         .textCase(.uppercase)
                         .kerning(0.5)
                 }
                 .padding(.horizontal, config.horizontalPadding)
-                .padding(.top, isCompact ? 16 : 0)
-                .frame(height: isCompact ? nil : 24)
+                .padding(.top, useScrollView ? 0 : 16)
+                .frame(height: useScrollView ? 24 : nil)
 
                 // 使用共用的 FavoritesGridView
                 FavoritesGridView(
@@ -85,28 +127,27 @@ struct StartPage: View {
                     onFolderTap: enterFolder
                 )
                 .padding(.horizontal, config.horizontalPadding)
-                .padding(.bottom, isCompact ? 20 : 0)
             }
-            .frame(maxWidth: isCompact ? nil : 1200, alignment: .leading)
-            .frame(maxWidth: isCompact ? nil : .infinity)
+            .frame(maxWidth: useScrollView ? 1200 : nil, alignment: .leading)
+            .frame(maxWidth: useScrollView ? .infinity : nil)
         } else {
             // Empty state
-            VStack(spacing: isCompact ? 12 : 16) {
+            VStack(spacing: 16) {
                 Image(systemName: "bookmark")
-                    .font(.system(size: isCompact ? 32 : 48, weight: .light))
+                    .font(.system(size: 48, weight: .light))
                     .foregroundColor(Color("TextMuted").opacity(0.5))
 
-                Text(isCompact ? "尚無書籤" : "No bookmarks yet")
-                    .font(.system(size: isCompact ? 13 : 14))
+                Text("No bookmarks yet")
+                    .font(.system(size: 14))
                     .foregroundColor(Color("TextMuted"))
 
-                Text(isCompact ? "按 ⌘D 加入目前頁面" : "Press ⌘D to bookmark the current page")
-                    .font(.system(size: isCompact ? 11 : 12))
+                Text("Press ⌘D to bookmark the current page")
+                    .font(.system(size: 12))
                     .foregroundColor(Color("TextMuted").opacity(0.7))
             }
             .frame(maxWidth: .infinity)
-            .frame(height: isCompact ? 120 : nil)
-            .padding(.top, isCompact ? 0 : 100)
+            .padding(.top, useScrollView ? 100 : 20)
+            .padding(.bottom, useScrollView ? 0 : 20)
         }
     }
 
@@ -344,6 +385,128 @@ struct BookmarkButton: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+// MARK: - Recently Closed Tabs Section
+
+struct RecentlyClosedTabsSection: View {
+    let closedTabs: [ClosedTab]
+    let onReopen: (UUID) -> Void
+    let onClearAll: () -> Void
+    var horizontalPadding: CGFloat = 32
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header - 統一使用與 BOOKMARKS 相同的樣式
+            HStack {
+                Text("Recently Closed")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color("TextMuted"))
+                    .textCase(.uppercase)
+                    .kerning(0.5)
+
+                Spacer()
+
+                // Clear all button
+                Button(action: onClearAll) {
+                    HStack(spacing: 4) {
+                        Text("Clear All")
+                            .font(.system(size: 12))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Tabs flow layout
+            FlowLayout(spacing: 12) {
+                ForEach(closedTabs) { tab in
+                    ClosedTabButton(tab: tab) {
+                        onReopen(tab.id)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
+    }
+}
+
+// MARK: - Closed Tab Button
+
+struct ClosedTabButton: View {
+    let tab: ClosedTab
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(tab.title)
+                .font(.system(size: 13))
+                .foregroundColor(Color("Text"))
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(isHovering ? Color("AccentHover") : Color("CardBg"))
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
+// MARK: - Flow Layout
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = layout(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(proposal: proposal, subviews: subviews)
+
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                       y: bounds.minY + result.positions[index].y),
+                          proposal: .unspecified)
+        }
+    }
+
+    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+
+            // If this item doesn't fit in the current row, move to next row
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentX = 0
+                currentY += rowHeight + spacing
+                rowHeight = 0
+            }
+
+            positions.append(CGPoint(x: currentX, y: currentY))
+            currentX += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            totalHeight = max(totalHeight, currentY + rowHeight)
+        }
+
+        return (CGSize(width: maxWidth, height: totalHeight), positions)
     }
 }
 
