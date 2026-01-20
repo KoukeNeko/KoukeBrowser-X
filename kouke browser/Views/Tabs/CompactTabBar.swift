@@ -98,6 +98,9 @@ struct CompactTabBar: View {
                                 inputURL: viewModel.inputURL,
                                 onInputURLChange: { url in viewModel.inputURL = url },
                                 onNavigate: { viewModel.navigate() },
+                                onSwitchTab: { tabId in viewModel.switchToTab(tabId) },
+                                allTabs: viewModel.tabs,
+                                viewModel: viewModel,
                                 isDarkTheme: isDark
                             )
                             .frame(width: tabWidth)
