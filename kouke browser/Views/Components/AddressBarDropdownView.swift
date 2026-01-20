@@ -24,60 +24,69 @@ struct AddressBarDropdownView: View {
                 suggestionsSection
             }
         }
-        .frame(width: 400)
+        .frame(width: 500, alignment: .top)
+        .frame(minHeight: 120)
         .background(Color("Bg"))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
     }
     
     // MARK: - Favorites Section
-    
+
     private var favoritesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Bookmarks header
-            Text("收藏夾")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color("TextMuted"))
-                .textCase(.uppercase)
-                .kerning(0.5)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-            
-            // Bookmarks grid
-            let rootBookmarks = bookmarkManager.rootBookmarks()
-            
-            if rootBookmarks.isEmpty {
-                emptyFavoritesView
-            } else {
+        let currentFolders = bookmarkManager.folders(in: nil)
+        let currentBookmarks = bookmarkManager.bookmarks(in: nil)
+
+        return VStack(alignment: .leading, spacing: 16) {
+            if !currentBookmarks.isEmpty || !currentFolders.isEmpty {
+                // Header
+                Text("收藏夾")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color("TextMuted"))
+                    .textCase(.uppercase)
+                    .kerning(0.5)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+
+                // Grid of folders and bookmarks (reuse StartPage style)
                 LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: 60, maximum: 80), spacing: 12)
+                    GridItem(.adaptive(minimum: 72, maximum: 88), spacing: 12)
                 ], spacing: 12) {
-                    ForEach(rootBookmarks.prefix(12)) { bookmark in
-                        FavoriteItemView(
-                            title: bookmark.title,
-                            faviconURL: bookmark.faviconURL
-                        ) {
+                    // Folders first
+                    ForEach(currentFolders.prefix(8)) { folder in
+                        DropdownFolderButton(
+                            folder: folder,
+                            bookmarkManager: bookmarkManager,
+                            onNavigate: onNavigate
+                        )
+                    }
+
+                    // Then bookmarks
+                    ForEach(currentBookmarks.prefix(8 - currentFolders.count)) { bookmark in
+                        DropdownBookmarkButton(bookmark: bookmark) {
                             onNavigate(bookmark.url)
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.bottom, 16)
+            } else {
+                // Empty state
+                VStack(spacing: 12) {
+                    Image(systemName: "bookmark")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundColor(Color("TextMuted").opacity(0.5))
+
+                    Text("尚無書籤")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color("TextMuted"))
+
+                    Text("按 ⌘D 加入目前頁面")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted").opacity(0.7))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
             }
         }
-    }
-    
-    private var emptyFavoritesView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "star")
-                .font(.system(size: 24))
-                .foregroundColor(Color("TextMuted").opacity(0.5))
-            Text("尚無收藏夾")
-                .font(.system(size: 12))
-                .foregroundColor(Color("TextMuted"))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
     }
     
     // MARK: - Suggestions Section
@@ -286,61 +295,158 @@ struct SuggestionRowView: View {
     }
 }
 
-// MARK: - Favorite Item View
+// MARK: - Dropdown Folder Button
 
-struct FavoriteItemView: View {
-    let title: String
-    let faviconURL: URL?
-    let onTap: () -> Void
-    
+struct DropdownFolderButton: View {
+    let folder: BookmarkFolder
+    let bookmarkManager: BookmarkManager
+    let onNavigate: (String) -> Void
+
     @State private var isHovering = false
-    
+
+    private var bookmarksInFolder: [Bookmark] {
+        bookmarkManager.bookmarks(in: folder.id)
+    }
+
     var body: some View {
-        Button(action: onTap) {
+        Button(action: {
+            // Navigate to first bookmark in folder if exists
+            if let first = bookmarksInFolder.first {
+                onNavigate(first.url)
+            }
+        }) {
             VStack(spacing: 6) {
-                // Favicon container
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    Rectangle()
                         .fill(Color("CardBg"))
-                        .frame(width: 56, height: 56)
-                    
-                    if let faviconURL = faviconURL {
-                        AsyncImage(url: faviconURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 56, height: 56)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            default:
-                                Image(systemName: "globe")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(Color("TextMuted"))
-                            }
-                        }
+                        .border(Color("Border"), width: 1)
+
+                    if bookmarksInFolder.isEmpty {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.yellow)
                     } else {
-                        Image(systemName: "globe")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color("TextMuted"))
+                        // Mini favicon collage
+                        DropdownFaviconCollage(bookmarks: Array(bookmarksInFolder.prefix(4)))
                     }
                 }
-                .scaleEffect(isHovering ? 1.05 : 1.0)
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .scaleEffect(isHovering ? 1.03 : 1.0)
                 .animation(.easeInOut(duration: 0.1), value: isHovering)
-                
-                // Title
-                Text(title)
+
+                Text(folder.name)
                     .font(.system(size: 10))
-                    .foregroundColor(Color("TextMuted"))
+                    .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(width: 56)
+                    .frame(width: 60)
             }
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
+        .onHover { isHovering = $0 }
+    }
+}
+
+// MARK: - Dropdown Favicon Collage
+
+struct DropdownFaviconCollage: View {
+    let bookmarks: [Bookmark]
+
+    private var gridSize: Int {
+        if bookmarks.count >= 4 { return 2 }
+        return 1
+    }
+
+    private var cellSize: CGFloat {
+        56.0 / CGFloat(gridSize)
+    }
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.fixed(cellSize), spacing: 0), count: gridSize),
+            spacing: 0
+        ) {
+            ForEach(0..<(gridSize * gridSize), id: \.self) { index in
+                if index < bookmarks.count {
+                    AsyncImage(url: bookmarks[index].faviconURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: cellSize, height: cellSize)
+                                .clipped()
+                        default:
+                            Rectangle()
+                                .fill(Color("TabInactive"))
+                                .frame(width: cellSize, height: cellSize)
+                        }
+                    }
+                } else {
+                    Rectangle()
+                        .fill(Color("TabInactive"))
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
         }
+        .frame(width: 56, height: 56)
+    }
+}
+
+// MARK: - Dropdown Bookmark Button
+
+struct DropdownBookmarkButton: View {
+    let bookmark: Bookmark
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    Rectangle()
+                        .fill(Color("CardBg"))
+                        .border(Color("Border"), width: 1)
+
+                    AsyncImage(url: bookmark.faviconURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 56, height: 56)
+                                .clipped()
+                        case .failure:
+                            Image(systemName: "globe")
+                                .font(.system(size: 20))
+                                .foregroundColor(Color("TextMuted"))
+                        case .empty:
+                            ProgressView()
+                                .scaleEffect(0.5)
+                        @unknown default:
+                            Image(systemName: "globe")
+                                .font(.system(size: 20))
+                                .foregroundColor(Color("TextMuted"))
+                        }
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .scaleEffect(isHovering ? 1.03 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isHovering)
+
+                Text(bookmark.title)
+                    .font(.system(size: 10))
+                    .foregroundColor(isHovering ? Color("Text") : Color("TextMuted"))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 60)
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
 
