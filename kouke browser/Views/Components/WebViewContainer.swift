@@ -307,6 +307,20 @@ struct WebViewContainer: NSViewRepresentable {
                     )
                 }
 
+                // Record visit for StartPage suggestions with thumbnail capture
+                if let url = webView.url?.absoluteString {
+                    let title = webView.title ?? ""
+                    // Capture thumbnail after a brief delay for page rendering
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        ThumbnailService.shared.captureThumbnail(for: webView, url: url) { thumbnailPath in
+                            SuggestionsManager.shared.recordVisit(
+                                url: url,
+                                title: title,
+                                thumbnailPath: thumbnailPath
+                            )
+                        }
+                    }
+                }
 
                 // Check reader mode availability
                 ReaderModeService.shared.checkReadability(webView: webView) { [weak self] isReadable in

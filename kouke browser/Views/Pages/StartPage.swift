@@ -15,6 +15,7 @@ struct StartPage: View {
 
     @ObservedObject var bookmarkManager = BookmarkManager.shared
     @ObservedObject var recentlyClosedManager = RecentlyClosedTabsManager.shared
+    @ObservedObject var suggestionsManager = SuggestionsManager.shared
     @State private var currentFolderId: UUID? = nil
     @State private var folderPath: [UUID] = []
 
@@ -40,6 +41,20 @@ struct StartPage: View {
                     Spacer()
                         .frame(height: 80)
                     contentView
+
+                    // 建議頁面
+                    if !suggestionsManager.suggestions.isEmpty {
+                        SuggestionsSection(
+                            suggestions: suggestionsManager.topSuggestions(limit: 8),
+                            onNavigate: onNavigate,
+                            onRemove: { suggestionsManager.removeSuggestion($0) },
+                            onClearAll: { suggestionsManager.clearAll() },
+                            horizontalPadding: config.horizontalPadding
+                        )
+                        .frame(maxWidth: 1200, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 48)
+                    }
 
                     // 最近關閉的分頁
                     if !recentlyClosedManager.closedTabs.isEmpty {
@@ -69,6 +84,18 @@ struct StartPage: View {
             // 下拉選單模式：不用 ScrollView
             VStack(spacing: 0) {
                 contentView
+
+                // 建議頁面
+                if !suggestionsManager.suggestions.isEmpty {
+                    SuggestionsSection(
+                        suggestions: suggestionsManager.topSuggestions(limit: 8),
+                        onNavigate: onNavigate,
+                        onRemove: { suggestionsManager.removeSuggestion($0) },
+                        onClearAll: { suggestionsManager.clearAll() },
+                        horizontalPadding: config.horizontalPadding
+                    )
+                    .padding(.top, 16)
+                }
 
                 // 最近關閉的分頁
                 if !recentlyClosedManager.closedTabs.isEmpty {
