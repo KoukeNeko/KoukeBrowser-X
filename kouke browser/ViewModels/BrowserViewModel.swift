@@ -330,6 +330,47 @@ class BrowserViewModel: ObservableObject {
         webView.goForward()
     }
 
+    /// Get the back history list for context menu
+    func getBackHistoryList() -> [NavigationHistoryItem] {
+        guard let id = activeTabId, let webView = webViews[id] else { return [] }
+        return webView.backForwardList.backList.reversed().enumerated().map { index, item in
+            NavigationHistoryItem(
+                index: index,
+                title: item.title ?? item.url.host ?? "Untitled",
+                url: item.url.absoluteString
+            )
+        }
+    }
+
+    /// Get the forward history list for context menu
+    func getForwardHistoryList() -> [NavigationHistoryItem] {
+        guard let id = activeTabId, let webView = webViews[id] else { return [] }
+        return webView.backForwardList.forwardList.enumerated().map { index, item in
+            NavigationHistoryItem(
+                index: index,
+                title: item.title ?? item.url.host ?? "Untitled",
+                url: item.url.absoluteString
+            )
+        }
+    }
+
+    /// Navigate to a specific item in back history (index 0 = most recent)
+    func goBackTo(index: Int) {
+        guard let id = activeTabId, let webView = webViews[id] else { return }
+        let backList = webView.backForwardList.backList
+        let reversedIndex = backList.count - 1 - index
+        guard reversedIndex >= 0 && reversedIndex < backList.count else { return }
+        webView.go(to: backList[reversedIndex])
+    }
+
+    /// Navigate to a specific item in forward history (index 0 = next page)
+    func goForwardTo(index: Int) {
+        guard let id = activeTabId, let webView = webViews[id] else { return }
+        let forwardList = webView.backForwardList.forwardList
+        guard index >= 0 && index < forwardList.count else { return }
+        webView.go(to: forwardList[index])
+    }
+
     func reload() {
         guard let id = activeTabId, let webView = webViews[id] else { return }
         webView.reload()
@@ -814,4 +855,13 @@ extension Notification.Name {
 
     // Downloads
     static let showDownloads = Notification.Name("showDownloads")
+}
+
+/// Item in navigation history for back/forward context menus
+struct NavigationHistoryItem: Identifiable {
+    let index: Int
+    let title: String
+    let url: String
+
+    var id: Int { index }
 }
