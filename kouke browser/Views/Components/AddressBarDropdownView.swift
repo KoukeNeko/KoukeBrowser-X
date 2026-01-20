@@ -38,6 +38,7 @@ struct AddressBarDropdownView: View {
             config: .dropdown,
             isCompact: true
         )
+        .frame(minHeight: 500, alignment: .top)  // 最小高度，頂部對齊
     }
     
     // MARK: - Suggestions Section
