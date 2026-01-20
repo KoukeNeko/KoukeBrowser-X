@@ -361,6 +361,13 @@ struct AddressInputContainer: View {
                         isTyping = false
                         suggestionService.cancelSearch()
                     }
+                },
+                onMouseDown: {
+                    // Reopen dropdown when clicking on already-focused text field
+                    if !showingDropdown {
+                        isTyping = false
+                        showingDropdown = true
+                    }
                 }
             )
             .font(.system(size: 13, design: .monospaced))

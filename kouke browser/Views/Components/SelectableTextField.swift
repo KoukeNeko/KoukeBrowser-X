@@ -12,6 +12,7 @@ import AppKit
 class AutoSelectTextField: NSTextField {
     var onBecomeFirstResponder: (() -> Void)?
     var onResignFirstResponder: (() -> Void)?
+    var onMouseDown: (() -> Void)?
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
@@ -29,6 +30,9 @@ class AutoSelectTextField: NSTextField {
     }
 
     override func mouseDown(with event: NSEvent) {
+        // Always notify about mouse down (even when already focused)
+        onMouseDown?()
+
         super.mouseDown(with: event)
         // If this is the first click that focuses the field, select all
         if self.currentEditor() != nil {
@@ -51,6 +55,7 @@ struct SelectableTextField: NSViewRepresentable {
     var onSubmit: (() -> Void)?
     var onFocus: (() -> Void)?
     var onBlur: (() -> Void)?
+    var onMouseDown: (() -> Void)?
 
     func makeNSView(context: Context) -> AutoSelectTextField {
         let textField = AutoSelectTextField()
@@ -69,6 +74,9 @@ struct SelectableTextField: NSViewRepresentable {
         textField.onBecomeFirstResponder = {
             coordinator.parent.onFocus?()
         }
+        textField.onMouseDown = {
+            coordinator.parent.onMouseDown?()
+        }
 
         return textField
     }
@@ -82,6 +90,9 @@ struct SelectableTextField: NSViewRepresentable {
         let coordinator = context.coordinator
         nsView.onBecomeFirstResponder = {
             coordinator.parent.onFocus?()
+        }
+        nsView.onMouseDown = {
+            coordinator.parent.onMouseDown?()
         }
     }
 
