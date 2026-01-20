@@ -9,18 +9,19 @@ import SwiftUI
 
 struct StartPage: View {
     var onNavigate: (String) -> Void
+    var config: FavoritesGridConfig = .startPage
+    var isCompact: Bool = false  // true = dropdown 模式（無 ScrollView、無頂部空白）
+
     @ObservedObject var bookmarkManager = BookmarkManager.shared
     @State private var currentFolderId: UUID? = nil
     @State private var folderPath: [UUID] = []
-
-    private let gridConfig = FavoritesGridConfig.startPage
 
     private var currentFolderName: String {
         if let folderId = currentFolderId,
            let folder = bookmarkManager.folders.first(where: { $0.id == folderId }) {
             return folder.name
         }
-        return "Bookmarks"
+        return isCompact ? "收藏夾" : "Bookmarks"
     }
 
     private var hasContent: Bool {
@@ -30,70 +31,83 @@ struct StartPage: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                Spacer()
-                    .frame(height: 80)
-
-                if hasContent {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Header with back button when in folder
-                        HStack(spacing: 4) {
-                            if currentFolderId != nil {
-                                Button(action: goBack) {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(Color("TextMuted"))
-                                        .frame(width: 24, height: 24)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            Text(currentFolderName)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color("TextMuted"))
-                                .textCase(.uppercase)
-                                .kerning(0.5)
-                        }
-                        .frame(height: 24)
-
-                        // 使用共用的 FavoritesGridView
-                        FavoritesGridView(
-                            bookmarkManager: bookmarkManager,
-                            folderId: currentFolderId,
-                            config: gridConfig,
-                            onNavigate: onNavigate,
-                            onFolderTap: enterFolder
-                        )
-                    }
-                    .padding(.horizontal, gridConfig.horizontalPadding)
-                    .frame(maxWidth: 1200)  // 限制最大寬度
-                    .frame(maxWidth: .infinity)  // 水平置中
-                } else {
-                    // Empty state when no bookmarks exist
-                    VStack(spacing: 16) {
-                        Image(systemName: "bookmark")
-                            .font(.system(size: 48, weight: .light))
-                            .foregroundColor(Color("TextMuted").opacity(0.5))
-
-                        Text("No bookmarks yet")
-                            .font(.system(size: 14))
-                            .foregroundColor(Color("TextMuted"))
-
-                        Text("Press ⌘D to bookmark the current page")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color("TextMuted").opacity(0.7))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 100)
+        if isCompact {
+            // Dropdown 模式：不用 ScrollView
+            contentView
+        } else {
+            // 全頁模式：使用 ScrollView
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer()
+                        .frame(height: 80)
+                    contentView
+                    Spacer()
                 }
-
-                Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color("Bg"))
         }
-        .background(Color("Bg"))
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if hasContent {
+            VStack(alignment: .leading, spacing: isCompact ? 12 : 16) {
+                // Header with back button when in folder
+                HStack(spacing: 4) {
+                    if currentFolderId != nil {
+                        Button(action: goBack) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: isCompact ? 12 : 14, weight: .medium))
+                                .foregroundColor(Color("TextMuted"))
+                                .frame(width: isCompact ? 20 : 24, height: isCompact ? 20 : 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Text(currentFolderName)
+                        .font(.system(size: isCompact ? 11 : 12, weight: .medium))
+                        .foregroundColor(Color("TextMuted"))
+                        .textCase(.uppercase)
+                        .kerning(0.5)
+                }
+                .padding(.horizontal, config.horizontalPadding)
+                .padding(.top, isCompact ? 16 : 0)
+                .frame(height: isCompact ? nil : 24)
+
+                // 使用共用的 FavoritesGridView
+                FavoritesGridView(
+                    bookmarkManager: bookmarkManager,
+                    folderId: currentFolderId,
+                    config: config,
+                    onNavigate: onNavigate,
+                    onFolderTap: enterFolder
+                )
+                .padding(.horizontal, config.horizontalPadding)
+                .padding(.bottom, isCompact ? 20 : 0)
+            }
+            .frame(maxWidth: isCompact ? .infinity : 1200, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        } else {
+            // Empty state
+            VStack(spacing: isCompact ? 12 : 16) {
+                Image(systemName: "bookmark")
+                    .font(.system(size: isCompact ? 32 : 48, weight: .light))
+                    .foregroundColor(Color("TextMuted").opacity(0.5))
+
+                Text(isCompact ? "尚無書籤" : "No bookmarks yet")
+                    .font(.system(size: isCompact ? 13 : 14))
+                    .foregroundColor(Color("TextMuted"))
+
+                Text(isCompact ? "按 ⌘D 加入目前頁面" : "Press ⌘D to bookmark the current page")
+                    .font(.system(size: isCompact ? 11 : 12))
+                    .foregroundColor(Color("TextMuted").opacity(0.7))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: isCompact ? 120 : nil)
+            .padding(.top, isCompact ? 0 : 100)
+        }
     }
 
     private func enterFolder(_ folderId: UUID) {

@@ -15,8 +15,6 @@ struct AddressBarDropdownView: View {
     let onSwitchTab: (UUID) -> Void
     var width: CGFloat? = nil
 
-    @ObservedObject var bookmarkManager = BookmarkManager.shared
-
     // 使用共用配置計算寬度
     private let gridConfig = FavoritesGridConfig.dropdown
     private var favoritesWidth: CGFloat { gridConfig.totalWidth }
@@ -38,48 +36,12 @@ struct AddressBarDropdownView: View {
 
     @ViewBuilder
     private var favoritesSection: some View {
-        let hasContent = !bookmarkManager.bookmarks(in: nil).isEmpty || !bookmarkManager.folders(in: nil).isEmpty
-
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            Text("收藏夾")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color("TextMuted"))
-                .textCase(.uppercase)
-                .kerning(0.5)
-                .padding(.horizontal, gridConfig.horizontalPadding)
-                .padding(.top, 16)
-
-            if hasContent {
-                // 使用共用的 FavoritesGridView
-                FavoritesGridView(
-                    bookmarkManager: bookmarkManager,
-                    folderId: nil,
-                    config: gridConfig,
-                    onNavigate: onNavigate
-                )
-                .padding(.horizontal, gridConfig.horizontalPadding)
-                .padding(.bottom, 20)
-            } else {
-                // Empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "bookmark")
-                        .font(.system(size: 32, weight: .light))
-                        .foregroundColor(Color("TextMuted").opacity(0.5))
-
-                    Text("尚無書籤")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color("TextMuted"))
-
-                    Text("按 ⌘D 加入目前頁面")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color("TextMuted").opacity(0.7))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 120)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // 直接使用 StartPage（compact 模式）
+        StartPage(
+            onNavigate: onNavigate,
+            config: .dropdown,
+            isCompact: true
+        )
     }
     
     // MARK: - Suggestions Section
