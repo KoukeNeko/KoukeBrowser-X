@@ -13,9 +13,10 @@ struct AddressBarDropdownView: View {
     let onSelect: (SuggestionItem) -> Void
     let onNavigate: (String) -> Void
     let onSwitchTab: (UUID) -> Void
-    
+    var width: CGFloat? = nil
+
     @ObservedObject var bookmarkManager = BookmarkManager.shared
-    
+
     var body: some View {
         VStack(spacing: 0) {
             if showFavorites {
@@ -24,7 +25,7 @@ struct AddressBarDropdownView: View {
                 suggestionsSection
             }
         }
-        .frame(minWidth: 400, maxWidth: 500)
+        .frame(width: width ?? 400)
         .fixedSize(horizontal: false, vertical: true)
         .background(Color("Bg"))
     }
