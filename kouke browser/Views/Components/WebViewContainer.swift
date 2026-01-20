@@ -8,6 +8,7 @@
 import SwiftUI
 import WebKit
 import CommonCrypto
+import UniformTypeIdentifiers
 
 // MARK: - Certificate Fetch Delegate
 
@@ -36,6 +37,112 @@ private class CertificateFetchDelegate: NSObject, URLSessionDelegate {
 
         completionHandler(.performDefaultHandling, nil)
     }
+}
+
+// MARK: - Custom WKWebView with Enhanced Context Menu
+
+/// Custom WKWebView that provides enhanced right-click context menu
+class KoukeWebView: WKWebView {
+    weak var contextMenuDelegate: KoukeWebViewContextMenuDelegate?
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+
+        // Add custom menu items at appropriate positions
+        var insertIndex = 0
+
+        // Find existing items to determine insert position
+        let reloadIndex = menu.items.firstIndex { $0.title.lowercased().contains("reload") || $0.identifier?.rawValue == "WKMenuItemIdentifierReload" }
+        let inspectIndex = menu.items.firstIndex { $0.title.lowercased().contains("inspect") || $0.identifier?.rawValue == "WKMenuItemIdentifierInspectElement" }
+
+        // Add Back item at the beginning if we can go back
+        if contextMenuDelegate?.canGoBack == true {
+            let backItem = NSMenuItem(title: "Back", action: #selector(menuGoBack), keyEquivalent: "")
+            backItem.target = self
+            menu.insertItem(backItem, at: insertIndex)
+            insertIndex += 1
+        }
+
+        // Add Forward item after Back if we can go forward
+        if contextMenuDelegate?.canGoForward == true {
+            let forwardItem = NSMenuItem(title: "Forward", action: #selector(menuGoForward), keyEquivalent: "")
+            forwardItem.target = self
+            menu.insertItem(forwardItem, at: insertIndex)
+            insertIndex += 1
+        }
+
+        // Add separator after navigation items if we added any
+        if insertIndex > 0 {
+            menu.insertItem(NSMenuItem.separator(), at: insertIndex)
+            insertIndex += 1
+        }
+
+        // Find where to insert page actions (after reload or at current position)
+        var pageActionsIndex = reloadIndex.map { $0 + 1 } ?? insertIndex
+
+        // If there's an inspect element, put page actions before the separator that precedes it
+        if let inspectIdx = inspectIndex, inspectIdx > 0 {
+            // Find the separator before Inspect Element
+            for i in stride(from: inspectIdx - 1, through: 0, by: -1) {
+                if menu.items[i].isSeparatorItem {
+                    pageActionsIndex = i
+                    break
+                }
+            }
+        }
+
+        // Add separator before page actions if needed
+        if pageActionsIndex > 0 && !menu.items[pageActionsIndex - 1].isSeparatorItem {
+            menu.insertItem(NSMenuItem.separator(), at: pageActionsIndex)
+            pageActionsIndex += 1
+        }
+
+        // Add View Source
+        let viewSourceItem = NSMenuItem(title: "View Page Source", action: #selector(menuViewSource), keyEquivalent: "")
+        viewSourceItem.target = self
+        menu.insertItem(viewSourceItem, at: pageActionsIndex)
+        pageActionsIndex += 1
+
+        // Add Save Page As
+        let saveItem = NSMenuItem(title: "Save Page As...", action: #selector(menuSavePage), keyEquivalent: "")
+        saveItem.target = self
+        menu.insertItem(saveItem, at: pageActionsIndex)
+        pageActionsIndex += 1
+
+        // Add Print Page
+        let printItem = NSMenuItem(title: "Print Page...", action: #selector(menuPrintPage), keyEquivalent: "")
+        printItem.target = self
+        menu.insertItem(printItem, at: pageActionsIndex)
+    }
+
+    @objc private func menuGoBack() {
+        goBack()
+    }
+
+    @objc private func menuGoForward() {
+        goForward()
+    }
+
+    @objc private func menuViewSource() {
+        contextMenuDelegate?.viewPageSource()
+    }
+
+    @objc private func menuSavePage() {
+        contextMenuDelegate?.savePageAs()
+    }
+
+    @objc private func menuPrintPage() {
+        contextMenuDelegate?.printPage()
+    }
+}
+
+/// Delegate protocol for KoukeWebView context menu actions
+protocol KoukeWebViewContextMenuDelegate: AnyObject {
+    var canGoBack: Bool { get }
+    var canGoForward: Bool { get }
+    func viewPageSource()
+    func savePageAs()
+    func printPage()
 }
 
 // MARK: - WebView Container
@@ -112,11 +219,11 @@ struct WebViewContainer: NSViewRepresentable {
         // Note: WebAuthn polyfill removed - it was overriding navigator.credentials
         // and causing compatibility issues with sites like Google
 
-        let webView = WKWebView(frame: .zero, configuration: configuration)
+        let webView = KoukeWebView(frame: .zero, configuration: configuration)
         context.coordinator.webView = webView // Assign webView to coordinator
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
-
+        webView.contextMenuDelegate = context.coordinator
 
         // Enable developer extras for Web Inspector
         webView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -146,7 +253,7 @@ struct WebViewContainer: NSViewRepresentable {
         Coordinator(self)
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, KoukeWebViewContextMenuDelegate {
         var parent: WebViewContainer
         private var titleObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
@@ -810,6 +917,90 @@ struct WebViewContainer: NSViewRepresentable {
             }
             removeDownloadObservation(download)
             activeDownloads.removeAll { $0 === download }
+        }
+
+        // MARK: - KoukeWebViewContextMenuDelegate
+
+        var canGoBack: Bool {
+            webView?.canGoBack ?? false
+        }
+
+        var canGoForward: Bool {
+            webView?.canGoForward ?? false
+        }
+
+        func viewPageSource() {
+            guard let webView = webView else { return }
+
+            webView.evaluateJavaScript("document.documentElement.outerHTML") { [weak self] result, error in
+                guard let self = self,
+                      let html = result as? String else { return }
+
+                Task { @MainActor in
+                    // Create a new tab with the page source
+                    let url = webView.url?.absoluteString ?? "unknown"
+                    let sourceURL = "kouke://source/\(url)"
+                    let title = "Source: \(webView.title ?? url)"
+
+                    // Store the source in a temporary location for display
+                    let newTab = Tab(title: title, url: sourceURL, isLoading: false)
+                    self.parent.viewModel.tabs.append(newTab)
+                    self.parent.viewModel.switchToTab(newTab.id)
+
+                    // Store source content for the SourceView to display
+                    self.parent.viewModel.pageSourceContent = html
+                    self.parent.viewModel.pageSourceURL = url
+                }
+            }
+        }
+
+        func savePageAs() {
+            guard let webView = webView,
+                  webView.url != nil else { return }
+
+            let savePanel = NSSavePanel()
+            savePanel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            savePanel.nameFieldStringValue = (webView.title ?? "page").appending(".html")
+            savePanel.allowedContentTypes = [.html]
+            savePanel.canCreateDirectories = true
+
+            savePanel.begin { [weak webView] response in
+                guard response == .OK,
+                      let destinationURL = savePanel.url,
+                      let webView = webView else { return }
+
+                // Get the full HTML and save it
+                webView.evaluateJavaScript("document.documentElement.outerHTML") { result, error in
+                    guard let html = result as? String else { return }
+
+                    do {
+                        try html.write(to: destinationURL, atomically: true, encoding: .utf8)
+                        NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
+                    } catch {
+                        NSLog("Failed to save page: \(error)")
+                    }
+                }
+            }
+        }
+
+        func printPage() {
+            guard let webView = webView else { return }
+
+            let printInfo = NSPrintInfo.shared
+            printInfo.horizontalPagination = .fit
+            printInfo.verticalPagination = .automatic
+            printInfo.isVerticallyCentered = false
+            printInfo.isHorizontallyCentered = false
+            printInfo.leftMargin = 36
+            printInfo.rightMargin = 36
+            printInfo.topMargin = 36
+            printInfo.bottomMargin = 36
+
+            let printOperation = webView.printOperation(with: printInfo)
+            printOperation.showsPrintPanel = true
+            printOperation.showsProgressPanel = true
+
+            printOperation.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
         }
     }
 }
