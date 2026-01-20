@@ -87,22 +87,14 @@ class RecentlyClosedTabsManager: ObservableObject {
         saveToStorage()
     }
 
-    /// Get and remove a closed tab for reopening
+    /// Get a closed tab for reopening (keeps the record)
     func reopenTab(_ id: UUID) -> ClosedTab? {
-        guard let index = closedTabs.firstIndex(where: { $0.id == id }) else {
-            return nil
-        }
-        let tab = closedTabs.remove(at: index)
-        saveToStorage()
-        return tab
+        return closedTabs.first { $0.id == id }
     }
 
-    /// Reopen the most recently closed tab
+    /// Reopen the most recently closed tab (keeps the record)
     func reopenLastClosedTab() -> ClosedTab? {
-        guard !closedTabs.isEmpty else { return nil }
-        let tab = closedTabs.removeFirst()
-        saveToStorage()
-        return tab
+        return closedTabs.first
     }
 
     // MARK: - Private Methods
