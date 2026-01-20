@@ -405,14 +405,10 @@ struct AddressInputContainer: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        // 追蹤 address bar 的 frame，用於設定 dropdown popover 寬度
         .background(
             GeometryReader { geo in
-                RoundedRectangle(cornerRadius: showingDropdown ? 10 : 8)
-                    .fill(Color("CardBg"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: showingDropdown ? 10 : 8)
-                            .stroke(showingDropdown ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-                    )
+                Color.clear
                     .onAppear {
                         addressBarFrame = geo.frame(in: .global)
                     }
