@@ -24,6 +24,9 @@ struct CompactDraggableTabView: NSViewRepresentable {
     let inputURL: String
     let onInputURLChange: (String) -> Void
     let onNavigate: () -> Void
+    let onSwitchTab: (UUID) -> Void  // 新增：切換分頁
+    let allTabs: [Tab]               // 新增：所有分頁（用於建議）
+    weak var viewModel: BrowserViewModel?  // 新增：viewModel 參考
 
     let isDarkTheme: Bool
 
@@ -52,7 +55,10 @@ struct CompactDraggableTabView: NSViewRepresentable {
             onDragEnded: onDragEnded,
             inputURL: inputURL,
             onInputURLChange: onInputURLChange,
-            onNavigate: onNavigate
+            onNavigate: onNavigate,
+            onSwitchTab: onSwitchTab,
+            allTabs: allTabs,
+            viewModel: viewModel
         )
         return container
     }
@@ -85,6 +91,12 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     private var dragEndedAction: (() -> Void)?
     private var inputURLChangeAction: ((String) -> Void)?
     private var navigateAction: (() -> Void)?
+    private var switchTabAction: ((UUID) -> Void)?  // 新增：切換分頁
+    private var allTabs: [Tab] = []                 // 新增：所有分頁
+    private weak var viewModel: BrowserViewModel?  // 新增：viewModel 參考
+    
+    // Address bar dropdown popover
+    private var dropdownPopover: AddressBarDropdownPopover?
 
     private var isEditing = false
     private var isDragging = false
@@ -349,7 +361,10 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         onDragEnded: @escaping () -> Void,
         inputURL: String,
         onInputURLChange: @escaping (String) -> Void,
-        onNavigate: @escaping () -> Void
+        onNavigate: @escaping () -> Void,
+        onSwitchTab: @escaping (UUID) -> Void,
+        allTabs: [Tab],
+        viewModel: BrowserViewModel?
     ) {
         self.tabId = tab.id
         self.tabTitle = tab.title
@@ -369,7 +384,60 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         self.inputURL = inputURL
         self.inputURLChangeAction = onInputURLChange
         self.navigateAction = onNavigate
+        self.switchTabAction = onSwitchTab
+        self.allTabs = allTabs
+        self.viewModel = viewModel
+        
+        // 初始化下拉選單
+        setupDropdownPopover()
+        
         updateUI()
+    }
+    
+    private func setupDropdownPopover() {
+        let popover = AddressBarDropdownPopover()
+        popover.onNavigate = { [weak self] url in
+            self?.inputURL = url
+            self?.inputURLChangeAction?(url)
+            self?.navigateAction?()
+            self?.isEditing = false
+            self?.updateUI()
+        }
+        popover.onSwitchTab = { [weak self] tabId in
+            self?.switchTabAction?(tabId)
+            self?.isEditing = false
+            self?.updateUI()
+        }
+        popover.onDismiss = { [weak self] in
+            // 下拉選單關閉時，如果不是在編輯中，重置狀態
+            if self?.window?.firstResponder != self?.addressField {
+                self?.isEditing = false
+                self?.updateUI()
+            }
+        }
+        self.dropdownPopover = popover
+    }
+    
+    private func showDropdownPopover() {
+        guard let addressField = addressField,
+              !addressField.isHidden else { return }
+        
+        // 計算下拉選單位置（地址欄下方）
+        let rect = addressField.bounds
+        
+        dropdownPopover?.show(
+            relativeTo: rect,
+            of: addressField,
+            preferredEdge: .maxY,
+            inputText: inputURL,
+            viewModel: viewModel,
+            currentTab: currentTab
+        )
+    }
+    
+    private func updateDropdownContent() {
+        guard dropdownPopover?.isShown == true else { return }
+        dropdownPopover?.updateContent(inputText: inputURL)
     }
 
     func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, isDarkTheme: Bool = false) {
@@ -483,12 +551,20 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
                  if window?.firstResponder != addressField {
                      window?.makeFirstResponder(addressField)
                  }
+                 // 自動全選
+                 DispatchQueue.main.async { [weak self] in
+                     self?.addressField?.selectText(nil)
+                 }
              }
+             // 顯示下拉選單
+             showDropdownPopover()
         } else {
             // Ensure we lose focus if we shouldn't be editing
             if window?.firstResponder == addressField {
                 window?.makeFirstResponder(nil)
             }
+            // 關閉下拉選單
+            dropdownPopover?.close()
         }
 
         // Loading state
@@ -813,6 +889,8 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         guard let field = obj.object as? NSTextField, field == addressField else { return }
         inputURL = field.stringValue
         inputURLChangeAction?(inputURL)
+        // 更新下拉選單內容
+        updateDropdownContent()
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
