@@ -17,9 +17,9 @@ struct AddressBarDropdownView: View {
 
     @ObservedObject var bookmarkManager = BookmarkManager.shared
 
-    // 計算剛好容納 6 個 icon 的寬度（與 StartPage 一致，spacing: 16）
-    // 6 icons × 56px + 5 gaps × 16px + padding 40px = 456px
-    private let favoritesWidth: CGFloat = 456
+    // 使用共用配置計算寬度
+    private let gridConfig = FavoritesGridConfig.dropdown
+    private var favoritesWidth: CGFloat { gridConfig.totalWidth }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,9 +38,7 @@ struct AddressBarDropdownView: View {
 
     @ViewBuilder
     private var favoritesSection: some View {
-        let currentFolders = bookmarkManager.folders(in: nil)
-        let currentBookmarks = bookmarkManager.bookmarks(in: nil)
-        let hasContent = !currentBookmarks.isEmpty || !currentFolders.isEmpty
+        let hasContent = !bookmarkManager.bookmarks(in: nil).isEmpty || !bookmarkManager.folders(in: nil).isEmpty
 
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -49,37 +47,18 @@ struct AddressBarDropdownView: View {
                 .foregroundColor(Color("TextMuted"))
                 .textCase(.uppercase)
                 .kerning(0.5)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, gridConfig.horizontalPadding)
                 .padding(.top, 16)
 
             if hasContent {
-                // Grid of folders and bookmarks (6 per row, using shared components from StartPage)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 6), spacing: 16) {
-                    // Folders first
-                    ForEach(currentFolders.prefix(8)) { folder in
-                        FolderButton(
-                            folder: folder,
-                            bookmarkManager: bookmarkManager,
-                            action: {
-                                // Navigate to first bookmark in folder
-                                if let first = bookmarkManager.bookmarks(in: folder.id).first {
-                                    onNavigate(first.url)
-                                }
-                            },
-                            size: 56
-                        )
-                    }
-
-                    // Then bookmarks
-                    ForEach(currentBookmarks.prefix(max(0, 8 - currentFolders.count))) { bookmark in
-                        BookmarkButton(
-                            bookmark: bookmark,
-                            action: { onNavigate(bookmark.url) },
-                            size: 56
-                        )
-                    }
-                }
-                .padding(.horizontal, 20)
+                // 使用共用的 FavoritesGridView
+                FavoritesGridView(
+                    bookmarkManager: bookmarkManager,
+                    folderId: nil,
+                    config: gridConfig,
+                    onNavigate: onNavigate
+                )
+                .padding(.horizontal, gridConfig.horizontalPadding)
                 .padding(.bottom, 20)
             } else {
                 // Empty state
