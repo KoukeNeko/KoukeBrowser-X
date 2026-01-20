@@ -436,7 +436,8 @@ struct AddressInputContainer: View {
                     viewModel.switchToTab(tabId)
                     showingDropdown = false
                     isTyping = false
-                }
+                },
+                width: addressBarFrame.width > 0 ? addressBarFrame.width : nil
             )
             .environmentObject(viewModel)
         }
