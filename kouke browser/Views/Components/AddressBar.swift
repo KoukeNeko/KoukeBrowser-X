@@ -20,6 +20,7 @@ struct AddressBar: View {
     @State private var showingDownloads = false
     @State private var showingSecurityInfo = false
     @State private var hasPlayingVideo = false
+    @State private var showingDropdown = false
 
     /// Calculate overall download progress (0.0 to 1.0)
     private var downloadProgress: Double? {
@@ -93,32 +94,14 @@ struct AddressBar: View {
                 NavButton(icon: "arrow.clockwise", action: viewModel.reload)
             }
 
-            // Address input container (no border, like Rust version)
-            HStack(spacing: 8) {
-                // Security lock icon (clickable)
-                Button(action: { showingSecurityInfo = true }) {
-                    Image(systemName: securityIcon)
-                        .font(.system(size: 11))
-                        .foregroundColor(securityIconColor)
-                }
-                .buttonStyle(.plain)
-                .help("View Security Info")
-                .popover(isPresented: $showingSecurityInfo, arrowEdge: .bottom) {
-                    if let tab = viewModel.activeTab {
-                        SecurityDetailPopover(securityInfo: tab.securityInfo, url: tab.url)
-                    }
-                }
-
-                // URL text field
-                TextField("Search or enter website", text: $viewModel.inputURL)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(Color("TextMuted"))
-                    .focused($isAddressFocused)
-                    .onSubmit {
-                        viewModel.navigate()
-                    }
-            }
+            // Address input container with Safari-style dropdown
+            AddressInputContainer(
+                viewModel: viewModel,
+                securityIcon: securityIcon,
+                securityIconColor: securityIconColor,
+                showingSecurityInfo: $showingSecurityInfo,
+                showingDropdown: $showingDropdown
+            )
 
             // Toolbar buttons in custom order
             ForEach(settings.toolbarButtonOrder) { button in
@@ -317,6 +300,98 @@ struct AddressBar: View {
                     })
                 }
             }
+        }
+    }
+}
+
+// MARK: - Address Input Container (Safari-style)
+
+struct AddressInputContainer: View {
+    @ObservedObject var viewModel: BrowserViewModel
+    let securityIcon: String
+    let securityIconColor: Color
+    @Binding var showingSecurityInfo: Bool
+    @Binding var showingDropdown: Bool
+
+    @State private var addressBarFrame: CGRect = .zero
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Security lock icon (clickable)
+            Button(action: { showingSecurityInfo = true }) {
+                Image(systemName: securityIcon)
+                    .font(.system(size: 11))
+                    .foregroundColor(securityIconColor)
+            }
+            .buttonStyle(.plain)
+            .help("View Security Info")
+            .popover(isPresented: $showingSecurityInfo, arrowEdge: .bottom) {
+                if let tab = viewModel.activeTab {
+                    SecurityDetailPopover(securityInfo: tab.securityInfo, url: tab.url)
+                }
+            }
+
+            // URL text field with auto-select on focus
+            SelectableTextField(
+                text: $viewModel.inputURL,
+                placeholder: "Search or enter website",
+                onSubmit: {
+                    showingDropdown = false
+                    viewModel.navigate()
+                },
+                onFocus: {
+                    showingDropdown = true
+                },
+                onBlur: {
+                    // Delay closing to allow clicking on dropdown items
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        showingDropdown = false
+                    }
+                }
+            )
+            .font(.system(size: 13, design: .monospaced))
+            .foregroundColor(Color("TextMuted"))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: showingDropdown ? 10 : 8)
+                    .fill(Color("CardBg"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: showingDropdown ? 10 : 8)
+                            .stroke(showingDropdown ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+                    )
+                    .onAppear {
+                        addressBarFrame = geo.frame(in: .global)
+                    }
+                    .onChange(of: geo.frame(in: .global)) { _, newFrame in
+                        addressBarFrame = newFrame
+                    }
+            }
+        )
+        .popover(isPresented: $showingDropdown, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+            AddressBarDropdownView(
+                suggestions: [],
+                showFavorites: viewModel.inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                onSelect: { item in
+                    if let url = item.url {
+                        viewModel.inputURL = url
+                        showingDropdown = false
+                        viewModel.navigate()
+                    }
+                },
+                onNavigate: { url in
+                    viewModel.inputURL = url
+                    showingDropdown = false
+                    viewModel.navigate()
+                },
+                onSwitchTab: { tabId in
+                    viewModel.switchToTab(tabId)
+                    showingDropdown = false
+                }
+            )
+            .environmentObject(viewModel)
         }
     }
 }
