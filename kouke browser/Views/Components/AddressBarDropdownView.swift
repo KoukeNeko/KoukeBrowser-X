@@ -24,7 +24,8 @@ struct AddressBarDropdownView: View {
                 suggestionsSection
             }
         }
-        .frame(width: 480)
+        .frame(minWidth: 400, maxWidth: 500)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color("Bg"))
     }
 
@@ -92,10 +93,24 @@ struct AddressBarDropdownView: View {
     }
     
     // MARK: - Suggestions Section
-    
+
+    @ViewBuilder
     private var suggestionsSection: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
+        if suggestions.isEmpty {
+            // 空狀態：顯示搜尋提示
+            VStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundColor(Color("TextMuted").opacity(0.5))
+
+                Text("輸入搜尋或網址")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color("TextMuted"))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 100)
+        } else {
+            VStack(spacing: 0) {
                 ForEach(groupedSuggestions.keys.sorted(by: sectionOrder), id: \.self) { section in
                     if let items = groupedSuggestions[section], !items.isEmpty {
                         SuggestionSectionView(
@@ -106,8 +121,8 @@ struct AddressBarDropdownView: View {
                     }
                 }
             }
+            .padding(.vertical, 8)
         }
-        .frame(maxHeight: 400)
     }
     
     // MARK: - Grouping
@@ -142,7 +157,8 @@ struct AddressBarDropdownView: View {
     }
     
     private func sectionOrder(_ a: String, _ b: String) -> Bool {
-        let order = ["目前頁面", "書籤", "歷史記錄", "切換至分頁", "Google 搜尋"]
+        // 優先順序：分頁切換 > 歷史記錄 > 書籤 > 搜尋建議
+        let order = ["切換至分頁", "歷史記錄", "書籤", "Google 搜尋"]
         let indexA = order.firstIndex(of: a) ?? 999
         let indexB = order.firstIndex(of: b) ?? 999
         return indexA < indexB
