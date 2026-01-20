@@ -116,7 +116,7 @@ struct StartPage: View {
                 }
                 .padding(.horizontal, config.horizontalPadding)
                 .padding(.top, useScrollView ? 0 : 16)
-                .frame(height: useScrollView ? 24 : nil)
+                .frame(height: 24)  // 固定高度確保一致性
 
                 // 使用共用的 FavoritesGridView
                 FavoritesGridView(
