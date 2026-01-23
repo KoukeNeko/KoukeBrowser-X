@@ -128,7 +128,8 @@ struct TabBar: View {
     }
 
     private func detachTabToNewWindow(tabId: UUID, at screenPoint: NSPoint) {
-        guard let result = viewModel.detachTab(tabId) else { return }
+        // Allow detaching last tab when creating a new window (moves the window)
+        guard let result = viewModel.detachTab(tabId, allowLastTab: true) else { return }
 
         // Create new window with the detached tab and its WebView
         WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: Optional(screenPoint))
@@ -137,38 +138,46 @@ struct TabBar: View {
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
-        NSLog("📥 TabBar: Receiving tab from window #\(transferData.sourceWindowId)")
-        if let result = WindowManager.shared.removeTabFromWindow(
-            windowNumber: transferData.sourceWindowId,
-            tabId: tabId
-        ) {
-            NSLog("📥 TabBar: Adding tab to destination, webView: \(result.webView != nil ? "present" : "nil")")
-            // Don't use animation to avoid state update issues during drag
+        // Check if tab is already in this view model (same window drop)
+        if viewModel.tabs.contains(where: { $0.id == tabId }) {
+            NSLog("📥 TabBar: Reordering tab within same viewModel (destination: \(destinationId))")
             if insertAfter {
-                viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
+                viewModel.moveTabAfter(draggedId: tabId, destinationId: destinationId)
             } else {
-                viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
+                viewModel.moveTabBefore(draggedId: tabId, destinationId: destinationId)
             }
-            NSLog("📥 TabBar: Tab added successfully, total tabs: \(viewModel.tabs.count)")
+            return
         }
+
+        // Use first-principles transfer: add to destination BEFORE removing from source
+        NSLog("📥 TabBar: Transferring tab from window #\(transferData.sourceWindowId) using first-principles pattern")
+        let position: WindowManager.TabInsertPosition = insertAfter ? .after(destinationId) : .before(destinationId)
+        WindowManager.shared.transferTab(
+            from: transferData.sourceWindowId,
+            tabId: tabId,
+            to: viewModel,
+            position: position
+        )
     }
 
     private func receiveTabAtEnd(transferData: TabTransferData) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
-        NSLog("📥 TabBar: Receiving tab at end from window #\(transferData.sourceWindowId)")
-        if let result = WindowManager.shared.removeTabFromWindow(
-            windowNumber: transferData.sourceWindowId,
-            tabId: tabId
-        ) {
-            NSLog("📥 TabBar: Adding tab at end, webView: \(result.webView != nil ? "present" : "nil")")
-            // Don't use animation to avoid state update issues during drag
-            viewModel.addExistingTab(result.tab)
-            if let webView = result.webView {
-                viewModel.registerWebView(webView, for: result.tab.id)
-            }
-            NSLog("📥 TabBar: Tab added at end successfully, total tabs: \(viewModel.tabs.count)")
+        // Check if tab is already in this view model (same window drop)
+        if viewModel.tabs.contains(where: { $0.id == tabId }) {
+            NSLog("📥 TabBar: Moving tab within same viewModel to end")
+            viewModel.moveTab(withID: tabId, to: viewModel.tabs.count)
+            return
         }
+
+        // Use first-principles transfer: add to destination BEFORE removing from source
+        NSLog("📥 TabBar: Transferring tab from window #\(transferData.sourceWindowId) to end using first-principles pattern")
+        WindowManager.shared.transferTab(
+            from: transferData.sourceWindowId,
+            tabId: tabId,
+            to: viewModel,
+            position: .atEnd
+        )
     }
 }
 

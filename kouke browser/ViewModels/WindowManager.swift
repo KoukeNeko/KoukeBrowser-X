@@ -71,6 +71,77 @@ class WindowManager {
         windowViewModels[windowNumber] = viewModel
     }
 
+    /// Transfer a tab from one window to another using the first-principles pattern:
+    /// ADD to destination FIRST, then REMOVE from source.
+    /// This ensures the tab always has a home and prevents SwiftUI lifecycle issues.
+    ///
+    /// - Parameters:
+    ///   - sourceWindowNumber: The window number where the tab currently lives
+    ///   - tabId: The ID of the tab to transfer
+    ///   - destinationViewModel: The viewModel to receive the tab
+    ///   - position: Where to insert in destination (.atEnd, .before(UUID), .after(UUID))
+    func transferTab(
+        from sourceWindowNumber: Int,
+        tabId: UUID,
+        to destinationViewModel: BrowserViewModel,
+        position: TabInsertPosition
+    ) {
+        NSLog("🔄 WindowManager: Transferring tab \(tabId) from window #\(sourceWindowNumber)")
+
+        // 1. Get source viewModel
+        guard let sourceVM = windowViewModels[sourceWindowNumber] else {
+            NSLog("❌ WindowManager: Source window #\(sourceWindowNumber) not found")
+            return
+        }
+
+        // 2. PEEK at the tab (get data WITHOUT removing)
+        guard let (tab, webView) = sourceVM.peekTab(tabId) else {
+            NSLog("❌ WindowManager: Tab \(tabId) not found in source")
+            return
+        }
+
+        let wasLastTab = sourceVM.tabs.count == 1
+
+        // 3. ADD to destination FIRST
+        switch position {
+        case .atEnd:
+            destinationViewModel.addExistingTab(tab)
+        case .before(let destId):
+            destinationViewModel.insertTabBefore(tab, webView: nil, destinationId: destId)
+        case .after(let destId):
+            destinationViewModel.insertTabAfter(tab, webView: nil, destinationId: destId)
+        }
+
+        // 4. Register WebView with destination
+        if let webView = webView {
+            destinationViewModel.registerWebView(webView, for: tabId)
+        }
+
+        NSLog("✅ WindowManager: Tab added to destination, now removing from source")
+
+        // 5. NOW remove from source (safe - destination already has it)
+        sourceVM.finalizeDetach(tabId)
+
+        // 6. If source is now empty, close it (with delay to let SwiftUI process the empty state)
+        if wasLastTab && sourceVM.tabs.isEmpty {
+            NSLog("🚪 WindowManager: Source window #\(sourceWindowNumber) is now empty, scheduling close")
+            // CRITICAL: Delay window close to let SwiftUI finish processing the empty state.
+            // Closing synchronously causes EXC_BAD_ACCESS because SwiftUI is still mid-update.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.closeEmptyWindow(windowNumber: sourceWindowNumber)
+            }
+        }
+
+        NSLog("✅ WindowManager: Transfer complete")
+    }
+
+    /// Position for inserting a transferred tab
+    enum TabInsertPosition {
+        case atEnd
+        case before(UUID)
+        case after(UUID)
+    }
+
     /// Remove tab from a specific window and return it along with WebView
     /// If the window becomes empty after removing the tab, the view will close itself
     func removeTabFromWindow(windowNumber: Int, tabId: UUID) -> (tab: Tab, webView: WKWebView?)? {
@@ -104,6 +175,12 @@ class WindowManager {
     private func closeEmptyWindow(windowNumber: Int) {
         NSLog("🚪 WindowManager: Closing empty window #\(windowNumber)")
 
+        // Check if window is still empty before proceeding
+        if let vm = windowViewModels[windowNumber], !vm.tabs.isEmpty {
+            NSLog("🚪 WindowManager: Aborting close for window #\(windowNumber) - tabs are present!")
+            return
+        }
+
         // Unregister first to prevent any further access
         windowViewModels.removeValue(forKey: windowNumber)
 
@@ -111,6 +188,12 @@ class WindowManager {
         guard let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) else {
             NSLog("🚪 WindowManager: Window #\(windowNumber) already gone")
             return
+        }
+
+        // DOUBLE CHECK: If the window has tabs now (e.g. tab was dragged back in), abort!
+        if let vm = windowViewModels[windowNumber], !vm.tabs.isEmpty {
+             NSLog("🚪 WindowManager: Aborting close for window #\(windowNumber) - tabs are present!")
+             return
         }
 
         // Remove notification observer to prevent double cleanup
