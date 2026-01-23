@@ -249,6 +249,12 @@ struct WebViewContainer: NSViewRepresentable {
         // URL changes are handled by the ViewModel
     }
 
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        // Invalidate all observations before the view is dismantled
+        // This prevents crashes when the WebView has been transferred to another window
+        coordinator.invalidateObservations()
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
@@ -274,11 +280,21 @@ struct WebViewContainer: NSViewRepresentable {
         }
 
         deinit {
+            invalidateObservations()
+        }
+
+        /// Invalidate all KVO observations - call this before the WebView is transferred
+        func invalidateObservations() {
             titleObservation?.invalidate()
+            titleObservation = nil
             urlObservation?.invalidate()
+            urlObservation = nil
             canGoBackObservation?.invalidate()
+            canGoBackObservation = nil
             canGoForwardObservation?.invalidate()
+            canGoForwardObservation = nil
             isLoadingObservation?.invalidate()
+            isLoadingObservation = nil
         }
 
         func setupObservers(for webView: WKWebView) {

@@ -220,33 +220,37 @@ struct CompactTabBar: View {
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
+        NSLog("📥 CompactTabBar: Receiving tab from window #\(transferData.sourceWindowId)")
         if let result = WindowManager.shared.removeTabFromWindow(
             windowNumber: transferData.sourceWindowId,
             tabId: tabId
         ) {
-            withAnimation(.default) {
-                if insertAfter {
-                    viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
-                } else {
-                    viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
-                }
+            NSLog("📥 CompactTabBar: Adding tab to destination, webView: \(result.webView != nil ? "present" : "nil")")
+            // Don't use animation to avoid state update issues during drag
+            if insertAfter {
+                viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
+            } else {
+                viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
             }
+            NSLog("📥 CompactTabBar: Tab added successfully, total tabs: \(viewModel.tabs.count)")
         }
     }
 
     private func receiveTabAtEnd(transferData: TabTransferData) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
+        NSLog("📥 CompactTabBar: Receiving tab at end from window #\(transferData.sourceWindowId)")
         if let result = WindowManager.shared.removeTabFromWindow(
             windowNumber: transferData.sourceWindowId,
             tabId: tabId
         ) {
-            withAnimation(.default) {
-                viewModel.addExistingTab(result.tab)
-                if let webView = result.webView {
-                    viewModel.registerWebView(webView, for: result.tab.id)
-                }
+            NSLog("📥 CompactTabBar: Adding tab at end, webView: \(result.webView != nil ? "present" : "nil")")
+            // Don't use animation to avoid state update issues during drag
+            viewModel.addExistingTab(result.tab)
+            if let webView = result.webView {
+                viewModel.registerWebView(webView, for: result.tab.id)
             }
+            NSLog("📥 CompactTabBar: Tab added at end successfully, total tabs: \(viewModel.tabs.count)")
         }
     }
 

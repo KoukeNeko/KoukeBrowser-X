@@ -135,38 +135,39 @@ struct TabBar: View {
     }
 
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
-        // Request the tab from the source window via WindowManager
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
-        // Find the source window and remove the tab from it
+        NSLog("📥 TabBar: Receiving tab from window #\(transferData.sourceWindowId)")
         if let result = WindowManager.shared.removeTabFromWindow(
             windowNumber: transferData.sourceWindowId,
             tabId: tabId
         ) {
-            // Insert into this window with the WebView
-            withAnimation(.default) {
-                if insertAfter {
-                    viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
-                } else {
-                    viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
-                }
+            NSLog("📥 TabBar: Adding tab to destination, webView: \(result.webView != nil ? "present" : "nil")")
+            // Don't use animation to avoid state update issues during drag
+            if insertAfter {
+                viewModel.insertTabAfter(result.tab, webView: result.webView, destinationId: destinationId)
+            } else {
+                viewModel.insertTabBefore(result.tab, webView: result.webView, destinationId: destinationId)
             }
+            NSLog("📥 TabBar: Tab added successfully, total tabs: \(viewModel.tabs.count)")
         }
     }
 
     private func receiveTabAtEnd(transferData: TabTransferData) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
+        NSLog("📥 TabBar: Receiving tab at end from window #\(transferData.sourceWindowId)")
         if let result = WindowManager.shared.removeTabFromWindow(
             windowNumber: transferData.sourceWindowId,
             tabId: tabId
         ) {
-            withAnimation(.default) {
-                viewModel.addExistingTab(result.tab)
-                if let webView = result.webView {
-                    viewModel.registerWebView(webView, for: result.tab.id)
-                }
+            NSLog("📥 TabBar: Adding tab at end, webView: \(result.webView != nil ? "present" : "nil")")
+            // Don't use animation to avoid state update issues during drag
+            viewModel.addExistingTab(result.tab)
+            if let webView = result.webView {
+                viewModel.registerWebView(webView, for: result.tab.id)
             }
+            NSLog("📥 TabBar: Tab added at end successfully, total tabs: \(viewModel.tabs.count)")
         }
     }
 }
