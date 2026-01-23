@@ -280,6 +280,48 @@ class DanmakuOverlayView: NSView {
     }
 }
 
+// MARK: - Hover Tracking View for Traffic Lights
+
+class PIPHoverTrackingView: NSView {
+    weak var pipWindow: NSWindow?
+    private var trackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea!)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        showTrafficLights(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        showTrafficLights(false)
+    }
+
+    private func showTrafficLights(_ show: Bool) {
+        guard let window = pipWindow else { return }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            window.standardWindowButton(.closeButton)?.animator().alphaValue = show ? 1.0 : 0.0
+            window.standardWindowButton(.miniaturizeButton)?.animator().alphaValue = show ? 1.0 : 0.0
+            window.standardWindowButton(.zoomButton)?.animator().alphaValue = show ? 1.0 : 0.0
+        }
+    }
+}
+
 // MARK: - PIP Window Controller
 
 class PIPWindowController: NSWindowController {
@@ -291,6 +333,7 @@ class PIPWindowController: NSWindowController {
     private var volume: Float = 1.0
     private var videoSizeObserver: NSKeyValueObservation?
     private var timeObserver: Any?
+    private var hoverTrackingView: PIPHoverTrackingView?
 
     // Danmaku support
     private var danmakuOverlay: DanmakuOverlayView?
@@ -333,6 +376,11 @@ class PIPWindowController: NSWindowController {
         window.level = .floating
         window.isMovableByWindowBackground = true
         window.backgroundColor = .black
+
+        // Hide title bar but keep traffic light buttons
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
 
         // Position at bottom-right
         if let screen = NSScreen.main {
@@ -1063,11 +1111,21 @@ class PIPManager: ObservableObject {
     }
 
     /// Extract ani.gamer.com.tw stream URL using their API
+    /// The flow requires: 1) Get device ID with cookies, 2) Start ad/verification, 3) Fetch m3u8
     private func extractAniGamerStream(sn: String, startTime: Double, volume: Float, webView: WKWebView) async {
         do {
+            // Get cookies from WebView to include authentication (needed for ALL requests)
+            let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+            let cookieHeader = cookies
+                .filter { $0.domain.contains("gamer.com.tw") }
+                .map { "\($0.name)=\($0.value)" }
+                .joined(separator: "; ")
+            
+            let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+            
             print("[PIP] ani.gamer.com.tw - Step 1: Getting device ID")
 
-            // Step 1: Get device ID
+            // Step 1: Get device ID (MUST include cookies to link to session)
             guard let deviceIdUrl = URL(string: "https://ani.gamer.com.tw/ajax/getdeviceid.php") else {
                 print("[PIP] Invalid device ID URL")
                 return
@@ -1075,7 +1133,10 @@ class PIPManager: ObservableObject {
 
             var deviceIdRequest = URLRequest(url: deviceIdUrl)
             deviceIdRequest.setValue("https://ani.gamer.com.tw/", forHTTPHeaderField: "Referer")
-            deviceIdRequest.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            deviceIdRequest.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            if !cookieHeader.isEmpty {
+                deviceIdRequest.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+            }
 
             let (deviceIdData, _) = try await URLSession.shared.data(for: deviceIdRequest)
 
@@ -1087,8 +1148,28 @@ class PIPManager: ObservableObject {
 
             print("[PIP] ani.gamer.com.tw - Got device ID: \(deviceId)")
 
-            // Step 2: Get m3u8 URL
-            print("[PIP] ani.gamer.com.tw - Step 2: Getting m3u8 URL")
+            // Step 2: Start ad/verification (required before m3u8 can be fetched)
+            print("[PIP] ani.gamer.com.tw - Step 2: Starting ad verification")
+            guard let adStartUrl = URL(string: "https://ani.gamer.com.tw/ajax/videoCastcis498.php?sn=\(sn)&s=194699") else {
+                print("[PIP] Invalid ad start URL")
+                return
+            }
+            
+            var adStartRequest = URLRequest(url: adStartUrl)
+            adStartRequest.setValue("https://ani.gamer.com.tw/animeVideo.php?sn=\(sn)", forHTTPHeaderField: "Referer")
+            adStartRequest.setValue("https://ani.gamer.com.tw", forHTTPHeaderField: "Origin")
+            adStartRequest.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            if !cookieHeader.isEmpty {
+                adStartRequest.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+            }
+            
+            let (adData, _) = try await URLSession.shared.data(for: adStartRequest)
+            if let adResponse = String(data: adData, encoding: .utf8) {
+                print("[PIP] ani.gamer.com.tw - Ad verification response: \(adResponse.prefix(200))")
+            }
+            
+            // Step 3: Get m3u8 URL
+            print("[PIP] ani.gamer.com.tw - Step 3: Getting m3u8 URL")
             guard let m3u8ApiUrl = URL(string: "https://ani.gamer.com.tw/ajax/m3u8.php?sn=\(sn)&device=\(deviceId)") else {
                 print("[PIP] Invalid m3u8 API URL")
                 return
@@ -1097,15 +1178,7 @@ class PIPManager: ObservableObject {
             var m3u8Request = URLRequest(url: m3u8ApiUrl)
             m3u8Request.setValue("https://ani.gamer.com.tw/animeVideo.php?sn=\(sn)", forHTTPHeaderField: "Referer")
             m3u8Request.setValue("https://ani.gamer.com.tw", forHTTPHeaderField: "Origin")
-            m3u8Request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
-
-            // Get cookies from WebView to include authentication
-            let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
-            let cookieHeader = cookies
-                .filter { $0.domain.contains("gamer.com.tw") }
-                .map { "\($0.name)=\($0.value)" }
-                .joined(separator: "; ")
-
+            m3u8Request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
             if !cookieHeader.isEmpty {
                 m3u8Request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
                 print("[PIP] ani.gamer.com.tw - Using cookies for auth")
@@ -1123,10 +1196,19 @@ class PIPManager: ObservableObject {
 
             print("[PIP] ani.gamer.com.tw - m3u8 response: \(m3u8Json)")
 
-            // Check for error
-            if let error = m3u8Json["error"] as? Int, error != 0 {
-                let errorMsg = m3u8Json["msg"] as? String ?? "Unknown error"
-                print("[PIP] ani.gamer.com.tw API error: \(errorMsg)")
+            // Check for error in nested structure
+            if let errorDict = m3u8Json["error"] as? [String: Any],
+               let errorCode = errorDict["code"] as? Int, errorCode != 0 {
+                let errorMsg = errorDict["message"] as? String ?? "Unknown error"
+                print("[PIP] ani.gamer.com.tw API error (code \(errorCode)): \(errorMsg)")
+                
+                // Error 1007 = Device verification error, try fallback to native PIP
+                if errorCode == 1007 {
+                    print("[PIP] Device verification failed, falling back to native browser PIP")
+                    await MainActor.run {
+                        self.tryNativePIPForBahamut(from: webView)
+                    }
+                }
                 return
             }
 
@@ -1136,6 +1218,10 @@ class PIPManager: ObservableObject {
             // Handle the case where src might be empty or contain a placeholder
             if m3u8UrlString == nil || m3u8UrlString?.isEmpty == true || m3u8UrlString?.contains("welcome_to_anigamer") == true {
                 print("[PIP] ani.gamer.com.tw - No valid m3u8 URL in response (may require authentication or ad viewing)")
+                // Fall back to native browser PIP
+                await MainActor.run {
+                    self.tryNativePIPForBahamut(from: webView)
+                }
                 return
             }
 
@@ -1156,7 +1242,7 @@ class PIPManager: ObservableObject {
             let headers: [String: String] = [
                 "Referer": "https://ani.gamer.com.tw/",
                 "Origin": "https://ani.gamer.com.tw",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+                "User-Agent": userAgent
             ]
 
             await MainActor.run {
@@ -1168,6 +1254,46 @@ class PIPManager: ObservableObject {
             print("[PIP] ani.gamer.com.tw error: \(error)")
             await MainActor.run {
                 self.isPIPActive = false
+            }
+        }
+    }
+    
+    /// Fallback to native browser PIP for Bahamut when API extraction fails
+    private func tryNativePIPForBahamut(from webView: WKWebView) {
+        let script = """
+        (function() {
+            const video = document.querySelector('video');
+            if (!video) return { success: false, error: 'No video found' };
+            
+            // Remove PIP disable attribute if present
+            if (video.disablePictureInPicture) {
+                video.disablePictureInPicture = false;
+                video.removeAttribute('disablePictureInPicture');
+            }
+            
+            // Check if already in PIP
+            if (document.pictureInPictureElement === video) {
+                return { success: true, action: 'already_in_pip' };
+            }
+            
+            // Request PIP
+            if (document.pictureInPictureEnabled) {
+                video.requestPictureInPicture()
+                    .then(() => console.log('[Kouke PIP] Native PIP activated for Bahamut'))
+                    .catch(err => console.error('[Kouke PIP] Native PIP failed:', err));
+                return { success: true, action: 'requested' };
+            } else {
+                return { success: false, error: 'PIP not supported' };
+            }
+        })();
+        """
+        
+        webView.evaluateJavaScript(script) { result, error in
+            if let error = error {
+                print("[PIP] Native PIP fallback error: \(error)")
+            }
+            if let info = result as? [String: Any] {
+                print("[PIP] Native PIP fallback result: \(info)")
             }
         }
     }

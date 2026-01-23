@@ -15,7 +15,6 @@ class WindowManager {
     static let shared = WindowManager()
 
     private var windowViewModels: [Int: BrowserViewModel] = [:]  // windowNumber -> viewModel
-    private var windows: [NSWindow] = []
 
     private init() {
         // Listen for app termination to save session
@@ -91,12 +90,40 @@ class WindowManager {
         } else {
             NSLog("✅ WindowManager: Successfully detached tab")
             if isLastTab {
-                NSLog("🚪 WindowManager: Last tab removed from window #\(windowNumber), view will handle close")
-                // Mark the viewModel as closing to signal the view
-                viewModel.isClosing = true
+                NSLog("🚪 WindowManager: Last tab removed from window #\(windowNumber), scheduling close")
+                // Schedule window close with a longer delay to let SwiftUI fully process the empty state
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.closeEmptyWindow(windowNumber: windowNumber)
+                }
             }
         }
         return result
+    }
+
+    /// Close an empty window after the last tab was removed
+    private func closeEmptyWindow(windowNumber: Int) {
+        NSLog("🚪 WindowManager: Closing empty window #\(windowNumber)")
+
+        // Unregister first to prevent any further access
+        windowViewModels.removeValue(forKey: windowNumber)
+
+        // Find the window
+        guard let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) else {
+            NSLog("🚪 WindowManager: Window #\(windowNumber) already gone")
+            return
+        }
+
+        // Remove notification observer to prevent double cleanup
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+
+        // Hide first
+        window.orderOut(nil)
+
+        // Close after delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NSLog("🚪 WindowManager: Actually closing window #\(windowNumber)")
+            window.close()
+        }
     }
 
     /// Close the window associated with a specific viewModel
@@ -109,12 +136,19 @@ class WindowManager {
 
         NSLog("🚪 WindowManager: Closing window #\(windowNumber) for viewModel")
 
-        // Unregister first
-        windowViewModels.removeValue(forKey: windowNumber)
+        // Find the window first
+        guard let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) else {
+            // Window already gone, just clean up
+            windowViewModels.removeValue(forKey: windowNumber)
+            return
+        }
 
-        // Find and close the window
-        if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
-            window.orderOut(nil)
+        // Hide window immediately to prevent visual glitches
+        window.orderOut(nil)
+
+        // Delay the actual close to let SwiftUI fully settle
+        // The willCloseNotification observer will handle cleanup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             window.close()
         }
     }
@@ -201,25 +235,23 @@ class WindowManager {
         // Show the window
         window.makeKeyAndOrderFront(nil)
 
-        // Keep reference and register viewModel
-        windows.append(window)
+        // Register viewModel for this window
         let windowNumber = window.windowNumber
         windowViewModels[windowNumber] = viewModel
         NSLog("📝 WindowManager.createNewWindow: Registered viewModel for window #\(windowNumber). Total: \(windowViewModels.count)")
 
-        // Clean up closed windows
-        // Note: Using synchronous cleanup since notification is already on main queue
-        // Avoid using Task { @MainActor } here as it can cause EXC_BAD_ACCESS
-        // when the async task completes after objects are deallocated
+        // Clean up when window closes
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
             queue: .main
-        ) { [weak self] notification in
-            guard let self = self,
-                  let closedWindow = notification.object as? NSWindow else { return }
-            // Synchronous cleanup - no Task needed since we're already on main queue
-            self.windows.removeAll { $0 == closedWindow }
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            // Only clean up if we still have this window registered
+            guard self.windowViewModels[windowNumber] != nil else {
+                NSLog("🗑️ WindowManager: Window #\(windowNumber) already unregistered, skipping cleanup")
+                return
+            }
             self.windowViewModels.removeValue(forKey: windowNumber)
             NSLog("🗑️ WindowManager: Unregistered window #\(windowNumber). Remaining: \(self.windowViewModels.count)")
         }
@@ -287,16 +319,6 @@ struct BrowserViewForWindow: View {
             .onChange(of: viewModel.activeTab?.title) { _, newTitle in
                 if let title = newTitle {
                     NSApp.keyWindow?.title = title
-                }
-            }
-            .onChange(of: viewModel.isClosing) { _, isClosing in
-                if isClosing {
-                    // Close this window - SwiftUI has finished processing the empty state
-                    NSLog("🚪 BrowserViewForWindow: isClosing detected, closing window")
-                    // Find our window by checking which one has this viewModel
-                    DispatchQueue.main.async {
-                        WindowManager.shared.closeWindowForViewModel(viewModel)
-                    }
                 }
             }
             .modifier(WindowFileMenuModifier(viewModel: viewModel))

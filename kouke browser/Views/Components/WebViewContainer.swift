@@ -9,6 +9,28 @@ import SwiftUI
 import WebKit
 import CommonCrypto
 import UniformTypeIdentifiers
+import ObjectiveC
+
+// MARK: - Associated Object Keys for Coordinator Transfer
+
+private var kCoordinatorKey: UInt8 = 0
+private var kPreviousCoordinatorKey: UInt8 = 0
+
+extension WKWebView {
+    /// Store the current coordinator on the WebView for safe transfer between windows
+    /// Uses RETAIN to keep the coordinator alive until it's properly replaced
+    var currentCoordinator: AnyObject? {
+        get { objc_getAssociatedObject(self, &kCoordinatorKey) as AnyObject? }
+        set { objc_setAssociatedObject(self, &kCoordinatorKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+
+    /// Keep a reference to the previous coordinator to prevent premature deallocation
+    /// This ensures the old coordinator stays alive until the WebView is fully transferred
+    var previousCoordinator: AnyObject? {
+        get { objc_getAssociatedObject(self, &kPreviousCoordinatorKey) as AnyObject? }
+        set { objc_setAssociatedObject(self, &kPreviousCoordinatorKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+}
 
 // MARK: - Certificate Fetch Delegate
 
@@ -154,12 +176,43 @@ struct WebViewContainer: NSViewRepresentable {
     private let settings = BrowserSettings.shared
 
     func makeNSView(context: Context) -> WKWebView {
-        // Check if we already have a WebView for this tab (e.g., after tab reordering)
+        // Check if we already have a WebView for this tab (e.g., after tab reordering or cross-window transfer)
         // This prevents WebView recreation when SwiftUI re-evaluates the view hierarchy
         if let existingWebView = viewModel.getWebView(for: tabId) {
+            // CRITICAL: First, invalidate the OLD coordinator's observations to prevent crashes
+            // When the WebView is transferred between windows, the old coordinator might still have
+            // active KVO observations. We need to clean those up BEFORE setting up new ones.
+            if let oldCoordinator = existingWebView.currentCoordinator as? Coordinator {
+                NSLog("🔄 WebViewContainer: Transferring WebView from old coordinator, invalidating old observations")
+
+                // Keep the old coordinator alive by storing it in previousCoordinator
+                // This prevents crashes during deallocation when the old window closes
+                existingWebView.previousCoordinator = oldCoordinator
+
+                // Invalidate all observations on the old coordinator
+                oldCoordinator.invalidateObservations()
+
+                // Clear the old coordinator's webView reference to prevent it from accessing the WebView
+                oldCoordinator.webView = nil
+            }
+
+            // Set up the new coordinator - this also marks ownership transfer
+            // When dismantleNSView is called on the old view, it will see currentCoordinator != coordinator
+            // and know to skip cleanup (we already did it above)
             context.coordinator.webView = existingWebView
-            // Re-setup observers in case they were lost
+            existingWebView.currentCoordinator = context.coordinator
+            existingWebView.previousCoordinator = nil // Clear any previous cycle
+
+            // Update delegates to point to the NEW coordinator
+            existingWebView.navigationDelegate = context.coordinator
+            existingWebView.uiDelegate = context.coordinator
+            if let koukeWebView = existingWebView as? KoukeWebView {
+                koukeWebView.contextMenuDelegate = context.coordinator
+            }
+
+            // Set up new observers for the new coordinator
             context.coordinator.setupObservers(for: existingWebView)
+
             return existingWebView
         }
 
@@ -221,6 +274,7 @@ struct WebViewContainer: NSViewRepresentable {
 
         let webView = KoukeWebView(frame: .zero, configuration: configuration)
         context.coordinator.webView = webView // Assign webView to coordinator
+        webView.currentCoordinator = context.coordinator // Store coordinator for safe transfer
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.contextMenuDelegate = context.coordinator
@@ -250,9 +304,22 @@ struct WebViewContainer: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
-        // Invalidate all observations before the view is dismantled
-        // This prevents crashes when the WebView has been transferred to another window
-        coordinator.invalidateObservations()
+        // Only invalidate observations if this coordinator is still the current one for the WebView
+        // If the WebView was transferred to another window, the new coordinator should have already
+        // invalidated our observations in makeNSView
+        if webView.currentCoordinator === coordinator {
+            NSLog("🗑️ WebViewContainer: Dismantling view, invalidating observations")
+            coordinator.invalidateObservations()
+            webView.currentCoordinator = nil
+            webView.previousCoordinator = nil
+        } else {
+            NSLog("🗑️ WebViewContainer: Dismantling view, but WebView was already transferred - skipping invalidation")
+            // Clear previousCoordinator if it's this coordinator (it was the old one that got transferred)
+            if webView.previousCoordinator === coordinator {
+                NSLog("🗑️ WebViewContainer: Clearing previousCoordinator reference")
+                webView.previousCoordinator = nil
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -285,6 +352,7 @@ struct WebViewContainer: NSViewRepresentable {
 
         /// Invalidate all KVO observations - call this before the WebView is transferred
         func invalidateObservations() {
+            // Invalidate all KVO observations first
             titleObservation?.invalidate()
             titleObservation = nil
             urlObservation?.invalidate()
@@ -295,9 +363,21 @@ struct WebViewContainer: NSViewRepresentable {
             canGoForwardObservation = nil
             isLoadingObservation?.invalidate()
             isLoadingObservation = nil
+
+            // NOTE: We intentionally do NOT nil out delegates here.
+            // The new coordinator will set them immediately after this call.
+            // Nil-ing them would create a brief window where delegates are nil,
+            // which could cause issues if the WebView tries to call a delegate method.
         }
 
         func setupObservers(for webView: WKWebView) {
+            // First invalidate any existing observations to prevent duplicates
+            titleObservation?.invalidate()
+            urlObservation?.invalidate()
+            canGoBackObservation?.invalidate()
+            canGoForwardObservation?.invalidate()
+            isLoadingObservation?.invalidate()
+
             // Observe title changes
             titleObservation = webView.observe(\.title, options: [.new]) { [weak self] webView, _ in
                 guard let self = self else { return }
