@@ -360,6 +360,7 @@ class PIPWindowController: NSWindowController {
 
         setupWindow()
         setupPlayer(with: videoURL, startTime: startTime, volume: volume, headers: headers)
+        setupHoverTracking()  // Must be after setupPlayer to be on top
 
         // Load danmaku if episode SN is available and feature is enabled
         if let sn = episodeSn, BrowserSettings.shared.enableDanmaku {
@@ -382,6 +383,11 @@ class PIPWindowController: NSWindowController {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
 
+        // Hide traffic lights by default - show on hover
+        window.standardWindowButton(.closeButton)?.alphaValue = 0
+        window.standardWindowButton(.miniaturizeButton)?.alphaValue = 0
+        window.standardWindowButton(.zoomButton)?.alphaValue = 0
+
         // Position at bottom-right
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
@@ -393,6 +399,15 @@ class PIPWindowController: NSWindowController {
         window.minSize = NSSize(width: 280, height: 158)
         // Don't set fixed aspect ratio - will be updated when video loads
         window.delegate = self
+    }
+
+    private func setupHoverTracking() {
+        guard let window = window, let contentView = window.contentView else { return }
+
+        hoverTrackingView = PIPHoverTrackingView(frame: contentView.bounds)
+        hoverTrackingView?.pipWindow = window
+        hoverTrackingView?.autoresizingMask = [.width, .height]
+        contentView.addSubview(hoverTrackingView!, positioned: .above, relativeTo: nil)
     }
 
     private func setupPlayer(with url: URL, startTime: Double, volume: Float, headers: [String: String]? = nil) {
