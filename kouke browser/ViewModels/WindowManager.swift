@@ -122,12 +122,11 @@ class WindowManager {
         // 5. NOW remove from source (safe - destination already has it)
         sourceVM.finalizeDetach(tabId)
 
-        // 6. If source is now empty, close it (with delay to let SwiftUI process the empty state)
+        // 6. If source is now empty, close it (with minimal delay to let SwiftUI process)
         if wasLastTab && sourceVM.tabs.isEmpty {
             NSLog("🚪 WindowManager: Source window #\(sourceWindowNumber) is now empty, scheduling close")
-            // CRITICAL: Delay window close to let SwiftUI finish processing the empty state.
-            // Closing synchronously causes EXC_BAD_ACCESS because SwiftUI is still mid-update.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            // Minimal delay to let SwiftUI process the empty state before closing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.closeEmptyWindow(windowNumber: sourceWindowNumber)
             }
         }
@@ -181,31 +180,36 @@ class WindowManager {
             return
         }
 
-        // Unregister first to prevent any further access
-        windowViewModels.removeValue(forKey: windowNumber)
-
         // Find the window
         guard let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) else {
             NSLog("🚪 WindowManager: Window #\(windowNumber) already gone")
+            // Clean up registration since window is gone
+            windowViewModels.removeValue(forKey: windowNumber)
             return
         }
 
-        // DOUBLE CHECK: If the window has tabs now (e.g. tab was dragged back in), abort!
-        if let vm = windowViewModels[windowNumber], !vm.tabs.isEmpty {
-             NSLog("🚪 WindowManager: Aborting close for window #\(windowNumber) - tabs are present!")
-             return
-        }
+        // Keep a strong reference to viewModel to prevent premature deallocation
+        // This is critical because @ObservedObject doesn't own the object
+        let viewModelToKeepAlive = windowViewModels[windowNumber]
 
-        // Remove notification observer to prevent double cleanup
+        // Remove notification observer to prevent the willCloseNotification handler from running
+        // We'll do cleanup ourselves after close
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
 
         // Hide first
         window.orderOut(nil)
 
-        // Close after delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        // Close after delay, keeping viewModel alive throughout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             NSLog("🚪 WindowManager: Actually closing window #\(windowNumber)")
             window.close()
+            
+            // NOW it's safe to unregister - window is fully closed
+            self?.windowViewModels.removeValue(forKey: windowNumber)
+            NSLog("🗑️ WindowManager: Unregistered window #\(windowNumber) after close. Remaining: \(self?.windowViewModels.count ?? 0)")
+            
+            // Keep viewModel reference until this block completes to ensure it stays alive
+            _ = viewModelToKeepAlive
         }
     }
 
