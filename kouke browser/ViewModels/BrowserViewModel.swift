@@ -27,6 +27,9 @@ class BrowserViewModel: ObservableObject {
     @Published var pageSourceContent: String?
     @Published var pageSourceURL: String?
 
+    // Flag to indicate this viewModel's window should close (set when last tab is detached)
+    @Published var isClosing: Bool = false
+
     // WebView instances managed separately
     private var webViews: [UUID: WKWebView] = [:]
 
@@ -271,11 +274,17 @@ class BrowserViewModel: ObservableObject {
         webViews.removeValue(forKey: id)
         tabs.remove(at: index)
 
-        // Switch to adjacent tab if there are remaining tabs
-        if activeTabId == id && !tabs.isEmpty {
-            let newIndex = min(index, tabs.count - 1)
-            activeTabId = tabs[newIndex].id
-            inputURL = tabs[newIndex].url
+        // Switch to adjacent tab if there are remaining tabs, or clear activeTabId if empty
+        if activeTabId == id {
+            if !tabs.isEmpty {
+                let newIndex = min(index, tabs.count - 1)
+                activeTabId = tabs[newIndex].id
+                inputURL = tabs[newIndex].url
+            } else {
+                // No tabs left - clear active tab ID to prevent stale references
+                activeTabId = nil
+                inputURL = ""
+            }
         }
 
         return (tab, webView)

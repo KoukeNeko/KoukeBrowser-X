@@ -65,12 +65,15 @@ class WindowManager {
     /// Register a view model for a window (called from BrowserView)
     func registerViewModel(_ viewModel: BrowserViewModel, for window: NSWindow) {
         let windowNumber = window.windowNumber
+        // Only log if this is a new registration
+        if windowViewModels[windowNumber] == nil {
+            NSLog("📝 WindowManager: Registered viewModel for window #\(windowNumber). Total: \(windowViewModels.count + 1)")
+        }
         windowViewModels[windowNumber] = viewModel
-        NSLog("📝 WindowManager: Registered viewModel for window #\(windowNumber). Total registered: \(windowViewModels.count)")
     }
 
     /// Remove tab from a specific window and return it along with WebView
-    /// If the window becomes empty after removing the tab, it will be closed automatically
+    /// If the window becomes empty after removing the tab, the view will close itself
     func removeTabFromWindow(windowNumber: Int, tabId: UUID) -> (tab: Tab, webView: WKWebView?)? {
         NSLog("🔍 WindowManager: Attempting to remove tab \(tabId) from window #\(windowNumber)")
         NSLog("🔍 WindowManager: Registered windows: \(Array(windowViewModels.keys))")
@@ -87,27 +90,33 @@ class WindowManager {
             NSLog("❌ WindowManager: detachTab returned nil")
         } else {
             NSLog("✅ WindowManager: Successfully detached tab")
-
-            // If this was the last tab, close the source window after a delay
-            // to allow the current drag operation to fully complete
             if isLastTab {
-                NSLog("🚪 WindowManager: Will close empty window #\(windowNumber)")
-                // Use a longer delay to ensure drag operation completes before closing
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    NSLog("🚪 WindowManager: Attempting to close window #\(windowNumber)")
-                    NSLog("🚪 WindowManager: All windows: \(NSApp.windows.map { $0.windowNumber })")
-                    // Find window from all app windows, not just our tracked windows array
-                    if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
-                        NSLog("🚪 WindowManager: Found window, closing it")
-                        window.close()
-                    } else {
-                        NSLog("🚪 WindowManager: Window #\(windowNumber) not found in NSApp.windows")
-                    }
-                    _ = self // Keep reference to avoid warning
-                }
+                NSLog("🚪 WindowManager: Last tab removed from window #\(windowNumber), view will handle close")
+                // Mark the viewModel as closing to signal the view
+                viewModel.isClosing = true
             }
         }
         return result
+    }
+
+    /// Close the window associated with a specific viewModel
+    func closeWindowForViewModel(_ viewModel: BrowserViewModel) {
+        // Find the window number for this viewModel
+        guard let windowNumber = windowViewModels.first(where: { $0.value === viewModel })?.key else {
+            NSLog("❌ WindowManager: No window found for viewModel")
+            return
+        }
+
+        NSLog("🚪 WindowManager: Closing window #\(windowNumber) for viewModel")
+
+        // Unregister first
+        windowViewModels.removeValue(forKey: windowNumber)
+
+        // Find and close the window
+        if let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }) {
+            window.orderOut(nil)
+            window.close()
+        }
     }
 
     /// Create a new browser window with a detached tab or a new blank tab
@@ -278,6 +287,16 @@ struct BrowserViewForWindow: View {
             .onChange(of: viewModel.activeTab?.title) { _, newTitle in
                 if let title = newTitle {
                     NSApp.keyWindow?.title = title
+                }
+            }
+            .onChange(of: viewModel.isClosing) { _, isClosing in
+                if isClosing {
+                    // Close this window - SwiftUI has finished processing the empty state
+                    NSLog("🚪 BrowserViewForWindow: isClosing detected, closing window")
+                    // Find our window by checking which one has this viewModel
+                    DispatchQueue.main.async {
+                        WindowManager.shared.closeWindowForViewModel(viewModel)
+                    }
                 }
             }
             .modifier(WindowFileMenuModifier(viewModel: viewModel))

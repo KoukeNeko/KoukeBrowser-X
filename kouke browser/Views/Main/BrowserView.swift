@@ -45,6 +45,15 @@ struct BrowserView: View {
                     NSApp.keyWindow?.title = title
                 }
             }
+            .onChange(of: viewModel.isClosing) { _, isClosing in
+                if isClosing {
+                    // Close this window when last tab is detached
+                    NSLog("🚪 BrowserView: isClosing detected, closing window")
+                    DispatchQueue.main.async {
+                        WindowManager.shared.closeWindowForViewModel(viewModel)
+                    }
+                }
+            }
             .modifier(FileMenuModifier(viewModel: viewModel))
             .modifier(ViewMenuModifier(viewModel: viewModel, showTabOverview: $showTabOverview, currentZoomLevel: $currentZoomLevel))
             .modifier(HistoryMenuModifier(viewModel: viewModel, showHistory: $showHistory))
