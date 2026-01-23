@@ -316,8 +316,16 @@ struct WebViewContainer: NSViewRepresentable {
             NSLog("🗑️ WebViewContainer: Dismantling view, but WebView was already transferred - skipping invalidation")
             // Clear previousCoordinator if it's this coordinator (it was the old one that got transferred)
             if webView.previousCoordinator === coordinator {
-                NSLog("🗑️ WebViewContainer: Clearing previousCoordinator reference")
-                webView.previousCoordinator = nil
+                // DELAYED RELEASE: Releasing immediately causes a crash during window closure (EXC_BAD_ACCESS in objc_release)
+                // We hold onto the coordinator (and thus the Old ViewModel) for a short buffer period so the window can close safely.
+                // This prevents the race condition where the coordinator is deallocated while the window hierarchy is still tearing down.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    // Re-check if it's still the same coordinator avoiding race if another transfer happened
+                    if webView.previousCoordinator === coordinator {
+                        NSLog("🗑️ WebViewContainer: clearing previousCoordinator reference after safe delay")
+                        webView.previousCoordinator = nil
+                    }
+                }
             }
         }
     }

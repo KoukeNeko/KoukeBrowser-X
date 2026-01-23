@@ -296,6 +296,38 @@ class BrowserViewModel: ObservableObject {
         switchToTab(tab.id)
     }
 
+    /// Peek at a tab and its WebView without removing (for first-principles transfer)
+    /// The caller should call finalizeDetach after the destination has the tab.
+    func peekTab(_ id: UUID) -> (tab: Tab, webView: WKWebView?)? {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return nil }
+        let tab = tabs[index]
+        let webView = webViews[id]
+        return (tab, webView)
+    }
+
+    /// Finalize detaching a tab after it's been added to the destination.
+    /// This removes the tab from this viewModel and handles active tab switching.
+    func finalizeDetach(_ id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+
+        // Remove from this window
+        webViews.removeValue(forKey: id)
+        tabs.remove(at: index)
+
+        // Switch to adjacent tab if there are remaining tabs, or clear activeTabId if empty
+        if activeTabId == id {
+            if !tabs.isEmpty {
+                let newIndex = min(index, tabs.count - 1)
+                activeTabId = tabs[newIndex].id
+                inputURL = tabs[newIndex].url
+            } else {
+                // No tabs left - clear active tab ID to prevent stale references
+                activeTabId = nil
+                inputURL = ""
+            }
+        }
+    }
+
     // MARK: - Navigation
 
     func navigate() {
