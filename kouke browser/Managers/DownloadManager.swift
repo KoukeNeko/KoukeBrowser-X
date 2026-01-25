@@ -187,6 +187,12 @@ class DownloadManager: ObservableObject {
         }
     }
 
+    /// Update the local path for a download (used when moving from temp to final destination)
+    func updateDownloadPath(for id: UUID, path: String) {
+        guard let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }
+        downloadItems[index].localPath = path
+    }
+
     /// Complete a WKDownload (file already at destination)
     func completeWKDownload(for id: UUID) {
         guard let index = downloadItems.firstIndex(where: { $0.id == id }) else { return }

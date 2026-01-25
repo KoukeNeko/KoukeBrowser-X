@@ -932,18 +932,19 @@ struct WebViewContainer: NSViewRepresentable {
             progressObservations.removeValue(forKey: downloadKey)
         }
 
+        // Store pending download info for moving from temp to final destination after completion
+        private var pendingDownloadDestinations: [ObjectIdentifier: (tempURL: URL, finalURL: URL)] = [:]
+
         @available(macOS 11.3, *)
         func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
             let settings = BrowserSettings.shared
-
-            // Determine download location
             let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
 
             // Get expected file size from response
             let expectedSize = response.expectedContentLength > 0 ? response.expectedContentLength : nil
 
             if settings.downloadLocation == .askEachTime {
-                // Show save panel
+                // Show save panel - this grants sandbox access to the selected location
                 let savePanel = NSSavePanel()
                 savePanel.directoryURL = downloadsURL
                 savePanel.nameFieldStringValue = suggestedFilename
@@ -951,8 +952,6 @@ struct WebViewContainer: NSViewRepresentable {
 
                 savePanel.begin { [weak self] panelResponse in
                     if panelResponse == .OK, let url = savePanel.url {
-                        // Track download in DownloadManager BEFORE calling completionHandler
-                        // to ensure tracking ID is set before progress updates
                         if let sourceURL = download.originalRequest?.url {
                             let trackingId = DownloadManager.shared.trackDownload(
                                 url: sourceURL,
@@ -961,7 +960,6 @@ struct WebViewContainer: NSViewRepresentable {
                                 expectedSize: expectedSize
                             )
                             self?.wkDownloadIds[ObjectIdentifier(download)] = trackingId
-                            // Setup KVO observation for progress
                             self?.observeDownloadProgress(download, trackingId: trackingId)
                         }
                         completionHandler(url)
@@ -970,44 +968,84 @@ struct WebViewContainer: NSViewRepresentable {
                     }
                 }
             } else {
-                // Save to Downloads folder with unique filename
-                var destinationURL = downloadsURL.appendingPathComponent(suggestedFilename)
+                // Auto-save: Download to temp directory first (always accessible),
+                // then move to Downloads folder upon completion
+                let tempDir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("KoukeDownloads", isDirectory: true)
 
-                // Handle duplicate filenames
+                // Create temp directory if needed
+                try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+                // Generate unique temp filename
+                let tempURL = tempDir.appendingPathComponent(UUID().uuidString + "_" + suggestedFilename)
+
+                // Calculate final destination in Downloads folder
+                var finalDestinationURL = downloadsURL.appendingPathComponent(suggestedFilename)
+
+                // Handle duplicate filenames for final destination
                 var counter = 1
                 let originalName = (suggestedFilename as NSString).deletingPathExtension
                 let ext = (suggestedFilename as NSString).pathExtension
 
-                while FileManager.default.fileExists(atPath: destinationURL.path) {
+                while FileManager.default.fileExists(atPath: finalDestinationURL.path) {
                     let newName = ext.isEmpty ? "\(originalName) (\(counter))" : "\(originalName) (\(counter)).\(ext)"
-                    destinationURL = downloadsURL.appendingPathComponent(newName)
+                    finalDestinationURL = downloadsURL.appendingPathComponent(newName)
                     counter += 1
                 }
 
-                // Track download in DownloadManager synchronously
+                // Store both temp and final destinations for moving after download completes
+                pendingDownloadDestinations[ObjectIdentifier(download)] = (tempURL: tempURL, finalURL: finalDestinationURL)
+
+                // Track download in DownloadManager with final destination path
                 if let sourceURL = download.originalRequest?.url {
                     let trackingId = DownloadManager.shared.trackDownload(
                         url: sourceURL,
                         suggestedFilename: suggestedFilename,
-                        destinationPath: destinationURL.path,
+                        destinationPath: finalDestinationURL.path,
                         expectedSize: expectedSize
                     )
                     self.wkDownloadIds[ObjectIdentifier(download)] = trackingId
-                    // Setup KVO observation for progress
                     self.observeDownloadProgress(download, trackingId: trackingId)
                 }
 
-                completionHandler(destinationURL)
+                // Download to temp location
+                completionHandler(tempURL)
             }
         }
 
         @available(macOS 11.3, *)
         func downloadDidFinish(_ download: WKDownload) {
             let downloadKey = ObjectIdentifier(download)
-            if let trackingId = self.wkDownloadIds[downloadKey] {
-                DownloadManager.shared.completeWKDownload(for: trackingId)
-                self.wkDownloadIds.removeValue(forKey: downloadKey)
+
+            // If we have a pending destination, move the file from temp to Downloads
+            if let pending = pendingDownloadDestinations[downloadKey] {
+                pendingDownloadDestinations.removeValue(forKey: downloadKey)
+
+                do {
+                    // Move from temp to final destination
+                    try FileManager.default.moveItem(at: pending.tempURL, to: pending.finalURL)
+
+                    // Update the tracking with the actual path
+                    if let trackingId = self.wkDownloadIds[downloadKey] {
+                        DownloadManager.shared.updateDownloadPath(for: trackingId, path: pending.finalURL.path)
+                        DownloadManager.shared.completeWKDownload(for: trackingId)
+                    }
+                } catch {
+                    print("[Download] Failed to move file to Downloads: \(error)")
+                    // Update path to temp location and mark as complete
+                    if let trackingId = self.wkDownloadIds[downloadKey] {
+                        DownloadManager.shared.updateDownloadPath(for: trackingId, path: pending.tempURL.path)
+                        DownloadManager.shared.completeWKDownload(for: trackingId)
+                    }
+                }
+            } else {
+                // No pending destination (user selected via save panel), just complete
+                if let trackingId = self.wkDownloadIds[downloadKey] {
+                    DownloadManager.shared.completeWKDownload(for: trackingId)
+                }
             }
+
+            self.wkDownloadIds.removeValue(forKey: downloadKey)
             removeDownloadObservation(download)
             activeDownloads.removeAll { $0 === download }
         }
@@ -1015,6 +1053,14 @@ struct WebViewContainer: NSViewRepresentable {
         @available(macOS 11.3, *)
         func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
             let downloadKey = ObjectIdentifier(download)
+
+            // Clean up pending destination and temp file
+            if let pending = pendingDownloadDestinations[downloadKey] {
+                pendingDownloadDestinations.removeValue(forKey: downloadKey)
+                // Try to delete the temp file if it exists
+                try? FileManager.default.removeItem(at: pending.tempURL)
+            }
+
             if let trackingId = self.wkDownloadIds[downloadKey] {
                 DownloadManager.shared.failDownload(for: trackingId, error: error)
                 self.wkDownloadIds.removeValue(forKey: downloadKey)
