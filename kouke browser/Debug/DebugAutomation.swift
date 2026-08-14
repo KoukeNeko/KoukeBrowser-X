@@ -23,6 +23,7 @@ final class DebugAutomation {
     private static let pollInterval: TimeInterval = 0.25
     private static let directoryName = "kouke-debug"
     private static let commandFileName = "command.json"
+    private static let writeProbeFileName = ".write-probe"
 
     private var pollTimer: Timer?
     private var lastExecutedSeq: Int = 0
@@ -45,7 +46,8 @@ final class DebugAutomation {
     }
 
     func start() {
-        try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
+        guard prepareWorkingDirectory() else { return }
+
         NSLog("🧪 DebugAutomation: watching %@", workingDirectory.path)
 
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { _ in
@@ -55,6 +57,37 @@ final class DebugAutomation {
         }
         RunLoop.main.add(timer, forMode: .common)
         pollTimer = timer
+    }
+
+    /// Creates the command directory and proves the app can write into it.
+    ///
+    /// Both halves are load-bearing. Creation can fail outright, and a directory
+    /// that already exists is not necessarily writable — a sandboxed build is
+    /// refused access to anything outside its container. Neither failure is
+    /// visible from the outside: the harness simply waits for result files that
+    /// will never appear, which reads as the app having hung. Probing here turns
+    /// a silent stall into a named error at launch.
+    private func prepareWorkingDirectory() -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: workingDirectory,
+                                                    withIntermediateDirectories: true)
+        } catch {
+            NSLog("🧪 DebugAutomation: cannot create %@ — %@ — harness disabled",
+                  workingDirectory.path, String(describing: error))
+            return false
+        }
+
+        let probeURL = workingDirectory.appendingPathComponent(Self.writeProbeFileName)
+        do {
+            try Data().write(to: probeURL, options: .atomic)
+            try FileManager.default.removeItem(at: probeURL)
+        } catch {
+            NSLog("🧪 DebugAutomation: %@ is not writable — %@ — harness disabled",
+                  workingDirectory.path, String(describing: error))
+            return false
+        }
+
+        return true
     }
 
     // MARK: - Command Loop
