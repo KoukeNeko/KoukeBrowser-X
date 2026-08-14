@@ -23,7 +23,9 @@ struct CompactTabBar: View {
 
     // Filter tabs based on settings - show all or only active tab
     private var visibleTabs: [Tab] {
-        if settings.showTabsInCompactMode {
+        // In compact mode, keep tabs visible whenever there are multiple tabs
+        // so users don't lose tab discoverability.
+        if settings.showTabsInCompactMode || viewModel.tabs.count > 1 {
             return viewModel.tabs
         } else {
             // Only show active tab

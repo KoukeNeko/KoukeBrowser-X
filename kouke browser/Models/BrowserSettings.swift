@@ -478,7 +478,11 @@ class BrowserSettings: ObservableObject {
             tabBarStyle = .normal
         }
 
-        showTabsInCompactMode = defaults.bool(forKey: "showTabsInCompactMode")
+        if defaults.object(forKey: "showTabsInCompactMode") != nil {
+            showTabsInCompactMode = defaults.bool(forKey: "showTabsInCompactMode")
+        } else {
+            showTabsInCompactMode = true
+        }
 
         // Developer settings
         disableJavaScript = defaults.bool(forKey: "disableJavaScript")
