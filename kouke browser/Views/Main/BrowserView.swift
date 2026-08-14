@@ -443,13 +443,7 @@ struct WindowAccessor: NSViewRepresentable {
 class WindowChromeConfigurator: NSObject {
     static let shared = WindowChromeConfigurator()
 
-    /// Height of the tab bar row the traffic lights should center within.
-    private static let tabBarBandHeight: CGFloat = 40
-    /// Extra leading inset so the buttons sit visually inside the tab band.
-    private static let trafficLightLeadingNudge: CGFloat = 6
-
     private var configuredWindows = Set<ObjectIdentifier>()
-    private var repositionObservers = [NSObjectProtocol]()
 
     func setup(for window: NSWindow) {
         let windowId = ObjectIdentifier(window)
@@ -475,53 +469,10 @@ class WindowChromeConfigurator: NSObject {
         window.isMovableByWindowBackground = false
         window.isMovable = false
 
-        positionTrafficLights(in: window)
-        observeForRepositioning(window)
-    }
-
-    /// Center the traffic lights vertically within the tab bar band.
-    /// The math is absolute (derived from the titlebar's own metrics), so
-    /// repeated calls are idempotent — earlier relative "+6/-6 per event"
-    /// logic accumulated drift on every live-resize notification.
-    func positionTrafficLights(in window: NSWindow) {
-        let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        let buttons = buttonTypes.compactMap { window.standardWindowButton($0) }
-        guard let titlebarView = buttons.first?.superview else { return }
-
-        let titlebarHeight = titlebarView.bounds.height
-        guard titlebarHeight > 0 else { return }
-
-        // Default AppKit metrics: buttons are centered in the titlebar and
-        // spaced 20pt apart starting at x = 7. Recompute both axes absolutely.
-        let buttonSpacing: CGFloat = 20
-        let defaultLeadingInset: CGFloat = 7
-
-        for (index, button) in buttons.enumerated() {
-            let size = button.frame.size
-            let centerFromWindowTop = Self.tabBarBandHeight / 2
-            let originY = titlebarHeight - centerFromWindowTop - size.height / 2
-            let originX = defaultLeadingInset + Self.trafficLightLeadingNudge + CGFloat(index) * buttonSpacing
-            button.setFrameOrigin(NSPoint(x: originX, y: originY))
-        }
-    }
-
-    private func observeForRepositioning(_ window: NSWindow) {
-        let notificationNames: [Notification.Name] = [
-            NSWindow.didResizeNotification,
-            NSWindow.didEndLiveResizeNotification,
-            NSWindow.didExitFullScreenNotification,
-            NSWindow.didBecomeKeyNotification
-        ]
-        for name in notificationNames {
-            let observer = NotificationCenter.default.addObserver(
-                forName: name,
-                object: window,
-                queue: .main
-            ) { [weak self, weak window] _ in
-                guard let window = window else { return }
-                self?.positionTrafficLights(in: window)
-            }
-            repositionObservers.append(observer)
+        // TrafficLightsView draws the window controls inside the tab bar, where
+        // AppKit's own buttons cannot be made to stay.
+        for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(type)?.isHidden = true
         }
     }
 }

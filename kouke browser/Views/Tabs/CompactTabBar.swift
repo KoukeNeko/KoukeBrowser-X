@@ -16,6 +16,12 @@ struct CompactTabBar: View {
     @State private var showingBookmarks = false
     @State private var isDropTargeted: Bool = false
 
+    /// The band must stay taller than the window's 32pt title bar: content
+    /// that lies entirely inside the title bar area is not composited and
+    /// renders blank. TrafficLightsView draws the window controls centered
+    /// in this height, so they line up with the tabs.
+    private static let barHeight: CGFloat = 40
+
     private var isCurrentPageBookmarked: Bool {
         guard let tab = viewModel.activeTab else { return false }
         return bookmarkManager.isBookmarked(url: tab.url)
@@ -38,8 +44,11 @@ struct CompactTabBar: View {
             HStack(spacing: 0) {
                 #if os(macOS)
                 // Keep space for traffic lights - 80px seems standard for Big Sur+
+                TrafficLightsView()
+                    .frame(height: Self.barHeight)
+
                 Color.clear
-                    .frame(width: 80, height: 40)
+                    .frame(width: TrafficLightsView.trailingInset, height: Self.barHeight)
                     .movesWindowOnDrag()
 
                 // Navigation buttons (back/forward) with history context menu
@@ -68,7 +77,7 @@ struct CompactTabBar: View {
                 #endif
 
                 // Calculate available width for tabs (Total - TrafficLights - NavButtons - RightButtons)
-                let availableWidth = geometry.size.width - 80 - 60 - 140
+                let availableWidth = geometry.size.width - TrafficLightsView.reservedWidth - 60 - 140
                 let tabWidth = calculateTabWidth(totalAvailableWidth: availableWidth)
 
                 let isDark = settings.theme == .dark
@@ -200,7 +209,7 @@ struct CompactTabBar: View {
                 .padding(.trailing, 8)
             }
         }
-        .frame(height: 40)
+        .frame(height: Self.barHeight)
         .background(Color("TitleBarBg"))
 
         .zIndex(100) // Ensure it sits on top if used in a ZStack

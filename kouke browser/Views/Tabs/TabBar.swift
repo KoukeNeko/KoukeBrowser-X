@@ -17,8 +17,11 @@ struct TabBar: View {
     @State private var draggedTabId: UUID?
     @State private var isEndDropTargeted: Bool = false
 
+    /// The band must stay taller than the window's 32pt title bar: content
+    /// that lies entirely inside the title bar area is not composited and
+    /// renders blank. TrafficLightsView draws the window controls centered
+    /// in this height, so they line up with the tabs.
     private static let barHeight: CGFloat = 40
-    private static let trafficLightsWidth: CGFloat = 80
     private static let addButtonWidth: CGFloat = 36
     private static let maxTabWidth: CGFloat = 200
     private static let minTabWidth: CGFloat = 100
@@ -29,8 +32,10 @@ struct TabBar: View {
 
             HStack(spacing: 0) {
                 #if os(macOS)
+                TrafficLightsView()
+
                 Color.clear
-                    .frame(width: Self.trafficLightsWidth)
+                    .frame(width: TrafficLightsView.trailingInset)
                     .movesWindowOnDrag()
                 #endif
 
@@ -122,7 +127,7 @@ struct TabBar: View {
         guard tabCount > 0 else { return (Self.maxTabWidth, Self.addButtonWidth) }
 
         #if os(macOS)
-        let leadingInset = Self.trafficLightsWidth
+        let leadingInset = TrafficLightsView.reservedWidth
         #else
         let leadingInset: CGFloat = 0
         #endif

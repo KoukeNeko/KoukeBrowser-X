@@ -10,7 +10,7 @@ file-command harness and asserts:
   5. Detaching the LAST tab moves the window (source closes, no empty husk).
   6. Dragging a tab cannot move the window: system window dragging is off and
      the tab strip / drag regions own the right areas.
-  7. Traffic lights stay centered in the tab band across resizes.
+  7. The tab bar keeps rendering after a page load.
 
 Usage: python3 scripts/verify-tabbar.py
 Requires: a DEBUG build of kouke browser already running.
@@ -21,8 +21,9 @@ import os
 import sys
 import time
 
+BUNDLE_ID = os.environ.get("KOUKE_BUNDLE_ID", "dev.koukeneko.kouke-browser")
 DEBUG_DIR = os.path.expanduser(
-    "~/Library/Containers/dev.koukeneko.kouke-browser/Data/tmp/kouke-debug"
+    f"~/Library/Containers/{BUNDLE_ID}/Data/tmp/kouke-debug"
 )
 COMMAND_FILE = os.path.join(DEBUG_DIR, "command.json")
 STATE_FILE = os.path.join(DEBUG_DIR, "state.json")
@@ -118,18 +119,18 @@ def check_window_drag_isolation():
     check("system window dragging is disabled", "isMovable=false" in moved, moved)
 
 
-def check_traffic_lights():
-    """Traffic lights must stay put; earlier code drifted on every resize."""
-    before = send({"cmd": "traffic_lights"})["message"]
-    for width, height in ((900, 600), (1400, 900), (1100, 750)):
-        send({"cmd": "window_frame", "w": width, "h": height})
-        time.sleep(0.2)
-    after = send({"cmd": "traffic_lights"})["message"]
+def check_bar_survives_navigation():
+    """The tab bar must keep drawing after a page load.
 
-    check("traffic lights do not drift across resizes", before == after,
-          f"before[{before}] after[{after}]")
-    check("traffic lights centered in the 40pt tab band",
-          after.count("centerFromTop=20.0") == 3, after)
+    A bar exactly as tall as the window's title bar renders completely blank —
+    its content is never composited — and a title change is what exposes it.
+    """
+    send({"cmd": "add_tab", "url": "https://example.com"})
+    time.sleep(2.5)
+    send({"cmd": "snapshot"})
+    window_number = browser_windows(read_state())[0]["windowNumber"]
+    check("tab strip still renders after a page load",
+          tab_strip_has_content(window_number))
 
 
 def main():
@@ -199,7 +200,7 @@ def main():
                   f"windows={[(w['windowNumber'], len(w['tabs'])) for w in windows]}")
 
     check_window_drag_isolation()
-    check_traffic_lights()
+    check_bar_survives_navigation()
 
     print()
     if failures:
