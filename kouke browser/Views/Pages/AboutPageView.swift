@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct AboutPageView: View {
     @ObservedObject private var settings = BrowserSettings.shared
@@ -22,6 +23,30 @@ struct AboutPageView: View {
         ProcessInfo.processInfo.operatingSystemVersionString
     }
 
+    /// The app icon, read from this bundle rather than from `NSApp`.
+    ///
+    /// `NSApp.applicationIconImage` resolves through LaunchServices, which has
+    /// no record of a build running out of a derived data directory and hands
+    /// back the generic placeholder icon instead of the real artwork. Reading
+    /// the bundle's own icon shows the right thing in every build, and the name
+    /// comes from Info.plist so renaming the icon does not silently break this.
+    private var appIcon: NSImage {
+        let iconName = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String
+
+        if let iconName {
+            if let fromCatalog = NSImage(named: iconName) {
+                return fromCatalog
+            }
+            if let iconURL = Bundle.main.url(forResource: iconName, withExtension: "icns"),
+               let fromResource = NSImage(contentsOf: iconURL) {
+                return fromResource
+            }
+        }
+
+        return NSApp.applicationIconImage
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -30,10 +55,12 @@ struct AboutPageView: View {
 
                 // App Icon and Name
                 VStack(spacing: 16) {
-                    Image(nsImage: NSApp.applicationIconImage)
+                    // No clip shape: a macOS icon already carries its own
+                    // rounded silhouette, and masking it again cuts the corners
+                    // twice at slightly different radii.
+                    Image(nsImage: appIcon)
                         .resizable()
                         .frame(width: 128, height: 128)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
                         .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
 
                     VStack(spacing: 4) {
