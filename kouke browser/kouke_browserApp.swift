@@ -201,7 +201,7 @@ struct kouke_browserApp: App {
 
             // Replace About menu item to open kouke:about
             CommandGroup(replacing: .appInfo) {
-                Button("About kouke browser") {
+                Button("About Ciruvo") {
                     NotificationCenter.default.post(
                         name: .openKoukeURL,
                         object: nil,
@@ -224,7 +224,7 @@ struct kouke_browserApp: App {
 
             // Help menu
             CommandGroup(replacing: .help) {
-                Button("kouke browser Help") {
+                Button("Ciruvo Help") {
                     NotificationCenter.default.post(
                         name: .openKoukeURL,
                         object: nil,

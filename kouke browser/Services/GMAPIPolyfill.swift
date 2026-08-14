@@ -233,7 +233,7 @@ struct GMAPIPolyfill {
                     namespace: '',
                     description: ''
                 },
-                scriptHandler: 'Kouke Browser',
+                scriptHandler: 'Ciruvo',
                 version: '1.0'
             };
 

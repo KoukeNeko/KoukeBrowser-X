@@ -1,4 +1,4 @@
-# KoukeBrowser-X 🌐
+# Ciruvo 🌐
 
 <div align="center">
 
@@ -13,10 +13,10 @@
 <br/>
 
 <div align="center">
-    <img width="800" alt="KoukeBrowser Start Page" src="https://github.com/user-attachments/assets/b0da41ba-7b2e-4058-9f7b-99a04790c472" />
+    <img width="800" alt="Ciruvo Start Page" src="https://github.com/user-attachments/assets/b0da41ba-7b2e-4058-9f7b-99a04790c472" />
     <br/>
     <br/>
-    <img width="800" alt="KoukeBrowser Settings" src="https://github.com/user-attachments/assets/5248db81-d932-44bc-82cf-60d37244a1a2" />
+    <img width="800" alt="Ciruvo Settings" src="https://github.com/user-attachments/assets/5248db81-d932-44bc-82cf-60d37244a1a2" />
 </div>
 
 <br/>
@@ -25,7 +25,7 @@
 
 ## 📖 Introduction
 
-**KoukeBrowser-X** is a native macOS application designed to push the boundaries of hybrid **SwiftUI** and **AppKit** development. Unlike standard SwiftUI apps, this project leverages underlying `NSWindow` and `NSHostingView` capabilities to achieve advanced window management features similar to Safari, such as tab dragging, window splitting, and custom traffic light positioning.
+**Ciruvo** is a native macOS application designed to push the boundaries of hybrid **SwiftUI** and **AppKit** development. Unlike standard SwiftUI apps, this project leverages underlying `NSWindow` and `NSHostingView` capabilities to achieve advanced window management features similar to Safari, such as tab dragging, window splitting, and custom traffic light positioning.
 
 The core engine is powered by Apple's **WebKit** framework, ensuring performance and security, while featuring a robust bookmark management system, tab operations, and privacy settings.
 

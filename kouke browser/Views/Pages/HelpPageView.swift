@@ -176,7 +176,7 @@ private struct HelpSidebarButton: View {
 private struct GettingStartedContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            HelpCard(title: "Welcome to Kouke Browser") {
+            HelpCard(title: "Welcome to Ciruvo") {
                 Text("Kouke is a fast, lightweight browser built for macOS. Here's how to get started:")
                     .font(.system(size: 13))
                     .foregroundColor(Color("Text"))
@@ -369,7 +369,7 @@ private struct ShortcutsHelpContent: View {
 private struct AboutHelpContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            HelpCard(title: "About Kouke Browser") {
+            HelpCard(title: "About Ciruvo") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Image(systemName: "globe")
@@ -377,7 +377,7 @@ private struct AboutHelpContent: View {
                             .foregroundColor(Color("AccentColor"))
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Kouke Browser")
+                            Text("Ciruvo")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(Color("Text"))
 

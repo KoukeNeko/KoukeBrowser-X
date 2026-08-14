@@ -64,7 +64,7 @@ struct AboutPageView: View {
                         .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
 
                     VStack(spacing: 4) {
-                        Text("Kouke Browser")
+                        Text("Ciruvo")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(Color("Text"))
 
