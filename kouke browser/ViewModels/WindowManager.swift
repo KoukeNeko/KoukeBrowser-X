@@ -240,6 +240,20 @@ class WindowManager {
         }
     }
 
+    /// Detach a tab into its own new window (the drag-out gesture).
+    /// If the source window becomes empty it is closed, so dragging the last
+    /// tab out of a window effectively moves the window to the drop location.
+    func detachTabToNewWindow(_ tabId: UUID, from sourceViewModel: BrowserViewModel, at screenPoint: NSPoint?) {
+        guard let detached = sourceViewModel.detachTab(tabId, allowLastTab: true) else { return }
+
+        createNewWindow(with: detached.tab, webView: detached.webView, at: screenPoint)
+
+        if sourceViewModel.tabs.isEmpty {
+            NSLog("🚪 WindowManager: Source window emptied by detach, closing it")
+            closeWindowForViewModel(sourceViewModel)
+        }
+    }
+
     /// Create a new browser window with a detached tab or a new blank tab
     func createNewWindow(with tab: Tab?, webView: WKWebView? = nil, at screenPoint: NSPoint?) {
         // Create a new view model with the detached tab and its WebView, or a new blank tab
@@ -295,7 +309,6 @@ class WindowManager {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = NSColor(named: "TitleBarBg")
-        window.isMovableByWindowBackground = true
         window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 400, height: 300)
 
@@ -319,8 +332,8 @@ class WindowManager {
         // Set content view
         window.contentView = NSHostingView(rootView: browserView)
 
-        // Configure traffic lights
-        configureTrafficLights(for: window)
+        // Shared chrome: no toolbar, transparent titlebar, centered traffic lights
+        WindowChromeConfigurator.shared.setup(for: window)
 
         // Show the window
         window.makeKeyAndOrderFront(nil)
@@ -347,37 +360,6 @@ class WindowManager {
         }
     }
 
-    private func configureTrafficLights(for window: NSWindow) {
-        let leadingOffset: CGFloat = 6
-        let topOffset: CGFloat = 6
-
-        // Apply offset to traffic light buttons
-        [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].forEach { buttonType in
-            if let button = window.standardWindowButton(buttonType) {
-                var frame = button.frame
-                frame.origin.x += leadingOffset
-                frame.origin.y -= topOffset
-                button.frame = frame
-            }
-        }
-
-        // Observe resize to maintain positions
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification,
-            object: window,
-            queue: .main
-        ) { [weak window] _ in
-            guard let window = window else { return }
-            [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].forEach { buttonType in
-                if let button = window.standardWindowButton(buttonType) {
-                    var frame = button.frame
-                    frame.origin.x += leadingOffset
-                    frame.origin.y -= topOffset
-                    button.frame = frame
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Browser View for Detached Window

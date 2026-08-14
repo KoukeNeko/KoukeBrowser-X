@@ -196,7 +196,6 @@ struct BrowserView: View {
     private func configureWindow(_ window: NSWindow, viewModel: BrowserViewModel, settings: BrowserSettings) {
         updateWindowAppearance(window, theme: settings.theme)
 
-        window.isMovableByWindowBackground = true
         window.tabbingMode = .disallowed
         window.makeKeyAndOrderFront(nil)
         WindowManager.shared.registerViewModel(viewModel, for: window)
@@ -204,7 +203,7 @@ struct BrowserView: View {
             window.title = activeTab.title
         }
         window.isExcludedFromWindowsMenu = false
-        ToolbarTabBarManager.shared.setup(for: window, viewModel: viewModel, settings: settings)
+        WindowChromeConfigurator.shared.setup(for: window)
     }
 
     private func updateWindowAppearance(_ window: NSWindow, theme: AppTheme) {
@@ -439,52 +438,91 @@ struct WindowAccessor: NSViewRepresentable {
     }
 }
 
-// MARK: - Toolbar Manager
+// MARK: - Window Chrome Configurator
 
-class ToolbarTabBarManager: NSObject {
-    static let shared = ToolbarTabBarManager()
+class WindowChromeConfigurator: NSObject {
+    static let shared = WindowChromeConfigurator()
 
-    private var configuredWindows = [ObjectIdentifier: TabBarStyle]()
-    private var resizeObservers = [ObjectIdentifier: NSObjectProtocol]()
+    /// Height of the tab bar row the traffic lights should center within.
+    private static let tabBarBandHeight: CGFloat = 40
+    /// Extra leading inset so the buttons sit visually inside the tab band.
+    private static let trafficLightLeadingNudge: CGFloat = 6
 
-    func setup(for window: NSWindow, viewModel: BrowserViewModel, settings: BrowserSettings) {
+    private var configuredWindows = Set<ObjectIdentifier>()
+    private var repositionObservers = [NSObjectProtocol]()
+
+    func setup(for window: NSWindow) {
         let windowId = ObjectIdentifier(window)
-        let currentStyle = settings.tabBarStyle
-
-        if configuredWindows[windowId] == currentStyle { return }
-        configuredWindows[windowId] = currentStyle
-
-        if let observer = resizeObservers[windowId] {
-            NotificationCenter.default.removeObserver(observer)
-            resizeObservers.removeValue(forKey: windowId)
-        }
+        if configuredWindows.contains(windowId) { return }
+        configuredWindows.insert(windowId)
 
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
 
-        let toolbar = NSToolbar(identifier: "MainToolbar")
-        window.toolbar = toolbar
+        // The SwiftUI layout draws its own tab bar in the titlebar area, so the
+        // window must not have an NSToolbar: on macOS 26+ a toolbar paints an
+        // opaque Liquid Glass titlebar band that covers the content beneath it
+        // (titlebarAppearsTransparent is no longer honored with a toolbar).
+        window.toolbar = nil
 
-        if #available(macOS 11.0, *) {
-            window.toolbarStyle = .unifiedCompact
-        }
+        // System window dragging must be off entirely. Every SwiftUI hosting
+        // view wrapping an NSViewRepresentable reports
+        // `mouseDownCanMoveWindow = true`, which overrides the tab view's own
+        // `false` — so any system-driven drag in the title bar area moves the
+        // window instead of the tab. `WindowDragRegion` reimplements moving on
+        // the empty areas only (see movesWindowOnDrag()).
+        window.isMovableByWindowBackground = false
+        window.isMovable = false
 
-        repositionTrafficLights(in: window, style: currentStyle)
-
-        let observer = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] notification in
-            guard let window = notification.object as? NSWindow else { return }
-            self?.repositionTrafficLights(in: window, style: currentStyle)
-        }
-        resizeObservers[windowId] = observer
+        positionTrafficLights(in: window)
+        observeForRepositioning(window)
     }
 
-    private func repositionTrafficLights(in window: NSWindow, style: TabBarStyle) {
-        // Standard behavior - toolbar style handles positioning
+    /// Center the traffic lights vertically within the tab bar band.
+    /// The math is absolute (derived from the titlebar's own metrics), so
+    /// repeated calls are idempotent — earlier relative "+6/-6 per event"
+    /// logic accumulated drift on every live-resize notification.
+    func positionTrafficLights(in window: NSWindow) {
+        let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        let buttons = buttonTypes.compactMap { window.standardWindowButton($0) }
+        guard let titlebarView = buttons.first?.superview else { return }
+
+        let titlebarHeight = titlebarView.bounds.height
+        guard titlebarHeight > 0 else { return }
+
+        // Default AppKit metrics: buttons are centered in the titlebar and
+        // spaced 20pt apart starting at x = 7. Recompute both axes absolutely.
+        let buttonSpacing: CGFloat = 20
+        let defaultLeadingInset: CGFloat = 7
+
+        for (index, button) in buttons.enumerated() {
+            let size = button.frame.size
+            let centerFromWindowTop = Self.tabBarBandHeight / 2
+            let originY = titlebarHeight - centerFromWindowTop - size.height / 2
+            let originX = defaultLeadingInset + Self.trafficLightLeadingNudge + CGFloat(index) * buttonSpacing
+            button.setFrameOrigin(NSPoint(x: originX, y: originY))
+        }
+    }
+
+    private func observeForRepositioning(_ window: NSWindow) {
+        let notificationNames: [Notification.Name] = [
+            NSWindow.didResizeNotification,
+            NSWindow.didEndLiveResizeNotification,
+            NSWindow.didExitFullScreenNotification,
+            NSWindow.didBecomeKeyNotification
+        ]
+        for name in notificationNames {
+            let observer = NotificationCenter.default.addObserver(
+                forName: name,
+                object: window,
+                queue: .main
+            ) { [weak self, weak window] _ in
+                guard let window = window else { return }
+                self?.positionTrafficLights(in: window)
+            }
+            repositionObservers.append(observer)
+        }
     }
 }
 

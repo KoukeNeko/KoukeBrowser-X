@@ -40,6 +40,7 @@ struct CompactTabBar: View {
                 // Keep space for traffic lights - 80px seems standard for Big Sur+
                 Color.clear
                     .frame(width: 80, height: 40)
+                    .movesWindowOnDrag()
 
                 // Navigation buttons (back/forward) with history context menu
                 HStack(spacing: 2) {
@@ -215,9 +216,7 @@ struct CompactTabBar: View {
     }
 
     private func detachTabToNewWindow(tabId: UUID, at screenPoint: NSPoint) {
-        // Allow detaching last tab when creating a new window (moves the window)
-        guard let result = viewModel.detachTab(tabId, allowLastTab: true) else { return }
-        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: Optional(screenPoint))
+        WindowManager.shared.detachTabToNewWindow(tabId, from: viewModel, at: screenPoint)
     }
 
     private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {

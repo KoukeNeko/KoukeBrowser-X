@@ -31,7 +31,6 @@ struct kouke_browserApp: App {
         .handlesExternalEvents(matching: Set(arrayLiteral: "main"))
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified)
         .commands {
             // File menu
             CommandGroup(replacing: .newItem) {

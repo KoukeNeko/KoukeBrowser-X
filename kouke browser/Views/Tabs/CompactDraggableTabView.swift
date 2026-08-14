@@ -641,7 +641,6 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         dragStartLocation = convert(event.locationInWindow, from: nil)
         isDragging = false
         isWindowDragging = false
-        window?.isMovableByWindowBackground = false
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -671,8 +670,6 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     }
 
     override func mouseUp(with event: NSEvent) {
-        window?.isMovableByWindowBackground = true
-
         // Skip edit mode if we just finished a window drag
         if isWindowDragging {
             isWindowDragging = false
@@ -706,7 +703,6 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         isDragging = false
-        window?.isMovableByWindowBackground = true
         dragEndedAction?()
 
         if operation == .move {
@@ -811,8 +807,8 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
            source.tabId == tabId {
             return []
         }
-        // Also check DraggableTabContainerView for cross-style compatibility
-        if let source = sender.draggingSource as? DraggableTabContainerView,
+        // Also check the normal-style tab view for cross-style compatibility
+        if let source = sender.draggingSource as? TabDragSourceView,
            source.tabId == tabId {
             return []
         }
@@ -835,8 +831,8 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             hideDropIndicators()
             return []
         }
-        // Also check DraggableTabContainerView for cross-style compatibility
-        if let source = sender.draggingSource as? DraggableTabContainerView,
+        // Also check the normal-style tab view for cross-style compatibility
+        if let source = sender.draggingSource as? TabDragSourceView,
            source.tabId == tabId {
             hideDropIndicators()
             return []

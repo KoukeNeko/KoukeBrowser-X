@@ -1,157 +1,169 @@
+//
+//  TabBar.swift
+//  kouke browser
+//
+//  Normal-style tab bar: a row of tabs in the title bar area.
+//
+//  The tab strip is only as wide as its tabs; the space left over is an
+//  explicit window-drag region. Nothing that drags the window ever overlaps a
+//  tab, which is what keeps tab drags from turning into window drags.
+//
+
 import SwiftUI
 import AppKit
-import UniformTypeIdentifiers
 
 struct TabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     @State private var draggedTabId: UUID?
-    @State private var availableWidth: CGFloat = 800
-    @State private var isDropTargeted: Bool = false
+    @State private var isEndDropTargeted: Bool = false
 
-    // Constants for tab sizing
-    private let maxTabWidth: CGFloat = 200
-    private let minTabWidth: CGFloat = 100
-    private let trafficLightsWidth: CGFloat = 80
-    private let addButtonWidth: CGFloat = 40
+    private static let barHeight: CGFloat = 40
+    private static let trafficLightsWidth: CGFloat = 80
+    private static let addButtonWidth: CGFloat = 36
+    private static let maxTabWidth: CGFloat = 200
+    private static let minTabWidth: CGFloat = 100
 
     var body: some View {
-        HStack(spacing: 0) {
-            #if os(macOS)
-            // Space for native traffic lights
-            Color.clear
-                .frame(width: trafficLightsWidth, height: 40)
-            #endif
+        GeometryReader { geometry in
+            let layout = stripLayout(totalWidth: geometry.size.width)
 
-            // Tab strip with horizontal scrolling
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        ForEach(viewModel.tabs) { tab in
-                            DraggableTabView(
-                                tab: tab,
-                                isActive: tab.id == viewModel.activeTabId,
-                                onSelect: { viewModel.switchToTab(tab.id) },
-                                onClose: { viewModel.closeTab(tab.id) },
-                                canClose: true,
-                                onReorder: { draggedId, destinationId, insertAfter in
-                                    withAnimation(.default) {
-                                        if insertAfter {
-                                            viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
-                                        } else {
-                                            viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
-                                        }
-                                    }
-                                },
-                                onReceiveTab: { transferData, destinationId, insertAfter in
-                                    receiveTabFromOtherWindow(transferData: transferData, destinationId: destinationId, insertAfter: insertAfter)
-                                },
-                                onDetach: { tabId, screenPoint in
-                                    detachTabToNewWindow(tabId: tabId, at: screenPoint)
-                                },
-                                onDragStarted: { id in
-                                    draggedTabId = id
-                                },
-                                onDragEnded: {
-                                    draggedTabId = nil
-                                }
-                            )
-                            .frame(width: calculateTabWidth(), height: 40)
-                            .opacity(draggedTabId == tab.id ? 0.5 : 1.0)
-                            .id(tab.id)
-                        }
+            HStack(spacing: 0) {
+                #if os(macOS)
+                Color.clear
+                    .frame(width: Self.trafficLightsWidth)
+                    .movesWindowOnDrag()
+                #endif
 
-                        // Add tab button
-                        Button(action: { viewModel.addTab() }) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color("TextMuted"))
-                                .frame(width: 28, height: 28)
-                        }
-                        .buttonStyle(.plain)
-                        .contentShape(Rectangle())
-                        .onHover { hovering in
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
-                        }
+                tabStrip(tabWidth: layout.tabWidth)
+                    .frame(width: layout.stripWidth)
+
+                // Everything past the last tab moves the window instead.
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .movesWindowOnDrag()
+            }
+        }
+        .frame(height: Self.barHeight)
+        .background(Color("TitleBarBg"))
+        .background(
+            // Drops that miss every tab append to the end of this window.
+            TabDropZoneView(
+                isDropTargeted: $isEndDropTargeted,
+                onReceiveTab: receiveTabAtEnd
+            )
+        )
+    }
+
+    // MARK: - Tab Strip
+
+    private func tabStrip(tabWidth: CGFloat) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(viewModel.tabs) { tab in
+                        TabItemView(
+                            tab: tab,
+                            isActive: tab.id == viewModel.activeTabId,
+                            canClose: true,
+                            isBeingDragged: draggedTabId == tab.id,
+                            onSelect: { viewModel.switchToTab(tab.id) },
+                            onClose: { viewModel.closeTab(tab.id) },
+                            onReorder: { draggedId, edge in
+                                reorderTab(draggedId, relativeTo: tab.id, edge: edge)
+                            },
+                            onReceiveTab: { transferData, edge in
+                                receiveTab(transferData, relativeTo: tab.id, edge: edge)
+                            },
+                            onDetach: detachTab,
+                            onDragStateChange: { draggedTabId = $0 }
+                        )
+                        .frame(width: tabWidth, height: Self.barHeight)
+                        .id(tab.id)
                     }
-                }
-                .onChange(of: viewModel.activeTabId) { _, newId in
-                    // Scroll to active tab when it changes
-                    if let newId = newId {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            proxy.scrollTo(newId, anchor: .center)
-                        }
-                    }
+
+                    addTabButton
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear.onAppear {
-                        availableWidth = geometry.size.width
-                    }
-                    .onChange(of: geometry.size.width) { _, newWidth in
-                        availableWidth = newWidth
-                    }
+            .onChange(of: viewModel.activeTabId) { _, newId in
+                guard let newId = newId else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(newId, anchor: .center)
                 }
-            )
-            .background(
-                // Drop zone as background - doesn't affect layout
-                TabDropZoneView(
-                    isDropTargeted: $isDropTargeted,
-                    onReceiveTab: { transferData in
-                        receiveTabAtEnd(transferData: transferData)
-                    }
-                )
-            )
+            }
         }
-        .frame(height: 40)
-        .background(Color("TitleBarBg"))
     }
 
-    /// Calculate the width for each tab based on available space
-    private func calculateTabWidth() -> CGFloat {
+    private var addTabButton: some View {
+        Button(action: { viewModel.addTab() }) {
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color("TextMuted"))
+                .frame(width: Self.addButtonWidth, height: Self.barHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("New Tab")
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+
+    // MARK: - Layout
+
+    /// Tabs shrink to share the available room and stop at `minTabWidth`,
+    /// after which the strip scrolls. Whatever they don't use stays free for
+    /// the window-drag region.
+    private func stripLayout(totalWidth: CGFloat) -> (tabWidth: CGFloat, stripWidth: CGFloat) {
         let tabCount = CGFloat(viewModel.tabs.count)
-        guard tabCount > 0 else { return maxTabWidth }
+        guard tabCount > 0 else { return (Self.maxTabWidth, Self.addButtonWidth) }
 
-        // Available width for tabs (excluding add button)
-        let tabAreaWidth = availableWidth - addButtonWidth
+        #if os(macOS)
+        let leadingInset = Self.trafficLightsWidth
+        #else
+        let leadingInset: CGFloat = 0
+        #endif
 
-        // Calculate ideal width per tab
-        let idealWidth = tabAreaWidth / tabCount
-
-        // Clamp between min and max
-        return min(max(idealWidth, minTabWidth), maxTabWidth)
+        let availableWidth = max(0, totalWidth - leadingInset - Self.addButtonWidth)
+        let idealWidth = availableWidth / tabCount
+        let tabWidth = min(max(idealWidth, Self.minTabWidth), Self.maxTabWidth)
+        let stripWidth = min(tabCount * tabWidth + Self.addButtonWidth,
+                             availableWidth + Self.addButtonWidth)
+        return (tabWidth, stripWidth)
     }
 
-    private func detachTabToNewWindow(tabId: UUID, at screenPoint: NSPoint) {
-        // Allow detaching last tab when creating a new window (moves the window)
-        guard let result = viewModel.detachTab(tabId, allowLastTab: true) else { return }
+    // MARK: - Tab Actions
 
-        // Create new window with the detached tab and its WebView
-        WindowManager.shared.createNewWindow(with: result.tab, webView: result.webView, at: Optional(screenPoint))
+    private func reorderTab(_ draggedId: UUID, relativeTo destinationId: UUID, edge: TabDropEdge) {
+        withAnimation(.default) {
+            switch edge {
+            case .trailing:
+                viewModel.moveTabAfter(draggedId: draggedId, destinationId: destinationId)
+            case .leading:
+                viewModel.moveTabBefore(draggedId: draggedId, destinationId: destinationId)
+            }
+        }
     }
 
-    private func receiveTabFromOtherWindow(transferData: TabTransferData, destinationId: UUID, insertAfter: Bool) {
+    private func detachTab(_ tabId: UUID, at screenPoint: NSPoint) {
+        WindowManager.shared.detachTabToNewWindow(tabId, from: viewModel, at: screenPoint)
+    }
+
+    private func receiveTab(_ transferData: TabTransferData, relativeTo destinationId: UUID, edge: TabDropEdge) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
-        // Check if tab is already in this view model (same window drop)
+        // A tab already in this window is a reorder, not a cross-window transfer.
         if viewModel.tabs.contains(where: { $0.id == tabId }) {
-            NSLog("📥 TabBar: Reordering tab within same viewModel (destination: \(destinationId))")
-            if insertAfter {
-                viewModel.moveTabAfter(draggedId: tabId, destinationId: destinationId)
-            } else {
-                viewModel.moveTabBefore(draggedId: tabId, destinationId: destinationId)
-            }
+            reorderTab(tabId, relativeTo: destinationId, edge: edge)
             return
         }
 
-        // Use first-principles transfer: add to destination BEFORE removing from source
-        NSLog("📥 TabBar: Transferring tab from window #\(transferData.sourceWindowId) using first-principles pattern")
-        let position: WindowManager.TabInsertPosition = insertAfter ? .after(destinationId) : .before(destinationId)
+        let position: WindowManager.TabInsertPosition = edge == .trailing
+            ? .after(destinationId)
+            : .before(destinationId)
         WindowManager.shared.transferTab(
             from: transferData.sourceWindowId,
             tabId: tabId,
@@ -160,18 +172,14 @@ struct TabBar: View {
         )
     }
 
-    private func receiveTabAtEnd(transferData: TabTransferData) {
+    private func receiveTabAtEnd(_ transferData: TabTransferData) {
         guard let tabId = UUID(uuidString: transferData.tabId) else { return }
 
-        // Check if tab is already in this view model (same window drop)
         if viewModel.tabs.contains(where: { $0.id == tabId }) {
-            NSLog("📥 TabBar: Moving tab within same viewModel to end")
             viewModel.moveTab(withID: tabId, to: viewModel.tabs.count)
             return
         }
 
-        // Use first-principles transfer: add to destination BEFORE removing from source
-        NSLog("📥 TabBar: Transferring tab from window #\(transferData.sourceWindowId) to end using first-principles pattern")
         WindowManager.shared.transferTab(
             from: transferData.sourceWindowId,
             tabId: tabId,
@@ -181,7 +189,7 @@ struct TabBar: View {
     }
 }
 
-// MARK: - Tab Drop Zone View
+// MARK: - End-of-Strip Drop Zone
 
 struct TabDropZoneView: NSViewRepresentable {
     @Binding var isDropTargeted: Bool
@@ -190,103 +198,69 @@ struct TabDropZoneView: NSViewRepresentable {
     func makeNSView(context: Context) -> TabDropZoneNSView {
         let view = TabDropZoneNSView()
         view.onDropTargetChanged = { isTargeted in
-            DispatchQueue.main.async {
-                isDropTargeted = isTargeted
-            }
+            DispatchQueue.main.async { isDropTargeted = isTargeted }
         }
         view.onReceiveTab = onReceiveTab
         return view
     }
 
-    func updateNSView(_ nsView: TabDropZoneNSView, context: Context) {}
+    func updateNSView(_ nsView: TabDropZoneNSView, context: Context) {
+        nsView.onReceiveTab = onReceiveTab
+    }
 }
 
 class TabDropZoneNSView: NSView {
     var onDropTargetChanged: ((Bool) -> Void)?
     var onReceiveTab: ((TabTransferData) -> Void)?
 
-    private var dropIndicator: NSView?
-    private var isShowingIndicator = false
+    private var isTargeted = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        setupView()
+        registerForDraggedTypes([.tabData])
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupView()
-    }
-
-    private func setupView() {
-        wantsLayer = true
         registerForDraggedTypes([.tabData])
-
-        // Create drop indicator
-        let indicator = NSView()
-        indicator.wantsLayer = true
-        indicator.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
-        indicator.layer?.cornerRadius = 1.5
-        indicator.translatesAutoresizingMaskIntoConstraints = false
-        indicator.isHidden = true
-        addSubview(indicator)
-        dropIndicator = indicator
-
-        NSLayoutConstraint.activate([
-            indicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            indicator.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            indicator.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
-            indicator.widthAnchor.constraint(equalToConstant: 3)
-        ])
     }
 
-    private func showDropIndicator() {
-        guard !isShowingIndicator else { return }
-        isShowingIndicator = true
-        dropIndicator?.isHidden = false
-        onDropTargetChanged?(true)
-    }
-
-    private func hideDropIndicator() {
-        guard isShowingIndicator else { return }
-        isShowingIndicator = false
-        dropIndicator?.isHidden = true
-        onDropTargetChanged?(false)
+    private func setTargeted(_ targeted: Bool) {
+        guard isTargeted != targeted else { return }
+        isTargeted = targeted
+        onDropTargetChanged?(targeted)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else {
-            return []
-        }
-        showDropIndicator()
+        guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else { return [] }
+        setTargeted(true)
         return .move
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard sender.draggingPasteboard.availableType(from: [.tabData]) != nil else {
-            hideDropIndicator()
+            setTargeted(false)
             return []
         }
-        showDropIndicator()
+        setTargeted(true)
         return .move
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
-        hideDropIndicator()
+        setTargeted(false)
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
-        hideDropIndicator()
+        setTargeted(false)
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        hideDropIndicator()
+        setTargeted(false)
 
         guard let data = sender.draggingPasteboard.data(forType: .tabData),
               let transferData = try? JSONDecoder().decode(TabTransferData.self, from: data) else {
             return false
         }
-
         onReceiveTab?(transferData)
         return true
     }
@@ -294,5 +268,5 @@ class TabDropZoneNSView: NSView {
 
 #Preview {
     TabBar(viewModel: BrowserViewModel())
-        .frame(width: 600)
+        .frame(width: 800)
 }
