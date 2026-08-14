@@ -285,6 +285,12 @@ struct WebViewContainer: NSViewRepresentable {
             configuration.userContentController.addUserScript(autofillScript)
         }
 
+        #if DEBUG
+        // Phase 0 spike: no-op unless a web extension has been loaded by the
+        // debug harness, so normal browsing is unaffected.
+        WebExtensionHost.shared.attachIfNeeded(to: configuration)
+        #endif
+
         // Note: Font size is now controlled via pageZoom instead of CSS injection
         // CSS injection of html font-size breaks sites that use rem units
 

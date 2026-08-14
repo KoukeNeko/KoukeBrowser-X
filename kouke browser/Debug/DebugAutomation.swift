@@ -71,6 +71,17 @@ final class DebugAutomation {
 
         lastExecutedSeq = seq
 
+        // Some commands (extension loading, page loads) are inherently async.
+        // Their result file simply appears later; the polling client already
+        // waits for result-<seq>.json, so no protocol change is needed.
+        if let asyncCommand = AsyncCommand(rawValue: command) {
+            Task { @MainActor in
+                let outcome = await self.executeAsync(asyncCommand, arguments: json)
+                self.writeResult(seq: seq, outcome: outcome)
+            }
+            return
+        }
+
         if let passwordCommand = PasswordCommand(rawValue: command) {
             writeResult(seq: seq, outcome: executePasswordCommand(passwordCommand, arguments: json))
             return
@@ -120,7 +131,7 @@ final class DebugAutomation {
         }
     }
 
-    private func writeResult(seq: Int, outcome: Result<String, Error>) {
+    func writeResult(seq: Int, outcome: Result<String, Error>) {
         var payload: [String: Any] = ["seq": seq]
         switch outcome {
         case .success(let message):
