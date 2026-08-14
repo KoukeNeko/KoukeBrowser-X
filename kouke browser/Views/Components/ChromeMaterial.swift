@@ -118,6 +118,65 @@ struct ChromePageBackground: View {
     }
 }
 
+// MARK: - Popovers
+
+/// The background of a floating panel — the bookmarks and downloads popovers,
+/// the address bar dropdown, the security details.
+///
+/// One look per appearance, the same way the chrome works: flat under Solid,
+/// blurred under Normal, glass under Liquid Glass. `.popover` is the material
+/// AppKit uses for exactly this surface, so Normal gets the system's own panel
+/// blur rather than the title bar's.
+struct ChromePopoverBackground: View {
+    let appearance: ChromeAppearance
+
+    var body: some View {
+        material
+            // A backdrop has nothing to respond to, and an AppKit view sitting
+            // behind SwiftUI content would otherwise take clicks and focus that
+            // belong to the panel's own controls.
+            .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var material: some View {
+        switch appearance {
+        case .solid:
+            Color("Bg")
+        case .normal:
+            VisualEffectBackground(material: .popover,
+                                   identifier: ChromeMaterialIdentifier.popover)
+        case .liquidGlass:
+            GlassBackground(identifier: ChromeMaterialIdentifier.popover)
+        }
+    }
+}
+
+extension View {
+    /// Paints a presented panel — a popover or a sheet — with the chrome
+    /// material.
+    ///
+    /// The material goes on the *presentation*, not on the content. A popover
+    /// draws its own arrow out of the system's background, so painting only the
+    /// content leaves the arrow in a different material and a seam shows where
+    /// the two meet: the panel reads as two pieces rather than one. Safari's
+    /// popovers look continuous because the arrow and the body are the same
+    /// surface, and this is what makes ours behave the same way.
+    func chromePanelBackground() -> some View {
+        modifier(ChromePanelBackground())
+    }
+}
+
+private struct ChromePanelBackground: ViewModifier {
+    @ObservedObject private var settings = BrowserSettings.shared
+
+    func body(content: Content) -> some View {
+        content.presentationBackground {
+            ChromePopoverBackground(appearance: settings.chromeAppearance)
+        }
+    }
+}
+
 // MARK: - Materials
 
 /// Identifiers on the material views.
@@ -132,6 +191,8 @@ enum ChromeMaterialIdentifier {
     /// opted out of drawing at all.
     static let addressBar = NSUserInterfaceItemIdentifier("KoukeChromeAddressBar")
     static let addressField = NSUserInterfaceItemIdentifier("KoukeChromeAddressField")
+    /// Floating panels: bookmarks, downloads, the address bar dropdown.
+    static let popover = NSUserInterfaceItemIdentifier("KoukeChromePopover")
 
     /// One per page. Hidden tabs stay in the view tree, so a single shared
     /// identifier could not say which page painted the material found there.

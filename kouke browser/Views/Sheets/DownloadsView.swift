@@ -47,7 +47,7 @@ struct DownloadsView: View {
             }
         }
         .frame(minWidth: 360, maxWidth: 420, minHeight: 400, maxHeight: 600)
-        .background(Color("Bg"))
+        .chromePanelBackground()
         .alert("Clear Downloads", isPresented: $showingClearAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Clear All", role: .destructive) {

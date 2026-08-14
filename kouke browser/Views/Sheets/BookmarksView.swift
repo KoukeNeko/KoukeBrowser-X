@@ -67,7 +67,7 @@ struct BookmarksView: View {
             }
         }
         .frame(minWidth: 320, maxWidth: 400, minHeight: 400, maxHeight: 600)
-        .background(Color("Bg"))
+        .chromePanelBackground()
         .sheet(item: $editingBookmark) { bookmark in
             EditBookmarkView(bookmark: bookmark) { updatedTitle, updatedURL, updatedFolderId in
                 bookmarkManager.updateBookmark(bookmark.id, title: updatedTitle, url: updatedURL, folderId: .some(updatedFolderId))
@@ -575,7 +575,7 @@ struct AddBookmarkPopover: View {
             )
         }
         .frame(minWidth: 320, maxWidth: 400, minHeight: 400, maxHeight: 500)
-        .background(Color("Bg"))
+        .chromePanelBackground()
     }
 }
 

@@ -62,7 +62,7 @@ struct SecurityDetailPopover: View {
         }
         .frame(width: 340)
         .frame(minHeight: 300, maxHeight: 500)
-        .background(Color("Bg"))
+        .chromePanelBackground()
     }
 
     // MARK: - Sections

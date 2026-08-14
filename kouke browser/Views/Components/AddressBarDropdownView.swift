@@ -25,7 +25,7 @@ struct AddressBarDropdownView: View {
         }
         .frame(width: width ?? 400)
         .fixedSize(horizontal: false, vertical: true)
-        .background(Color("Bg"))
+        .chromePanelBackground()
     }
 
     // MARK: - Favorites Section
