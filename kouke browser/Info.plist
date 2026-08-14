@@ -5,20 +5,18 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
 			<key>CFBundleURLName</key>
 			<string>Kouke Browser URL Scheme</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>kouke</string>
 			</array>
+		</dict>
+		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
-		</dict>
-		<!-- Declaring http and https is what registers the app with macOS as a
-		     browser: without it the app cannot be chosen as the default browser,
-		     and Apple's Web Browser Public Key Credential entitlement lists it as
-		     the first requirement. -->
-		<dict>
 			<key>CFBundleURLName</key>
 			<string>Web Site URL</string>
 			<key>CFBundleURLSchemes</key>
@@ -26,8 +24,6 @@
 				<string>http</string>
 				<string>https</string>
 			</array>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
 		</dict>
 	</array>
 </dict>
