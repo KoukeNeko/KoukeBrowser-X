@@ -36,7 +36,7 @@ final class DebugAutomation {
     /// answer each other's commands. A test run sets this to a private directory.
     private static let directoryEnvironmentKey = "KOUKE_DEBUG_DIR"
 
-    private var workingDirectory: URL {
+    var workingDirectory: URL {
         if let override = ProcessInfo.processInfo.environment[Self.directoryEnvironmentKey],
            !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
@@ -396,8 +396,12 @@ extension DebugAutomation {
         for (label, type) in buttonTypes {
             guard let button = window.standardWindowButton(type),
                   let titlebarView = button.superview else { continue }
+            if report.isEmpty {
+                report.append("titlebarHeight=\(titlebarView.bounds.height)")
+            }
             let centerFromTop = titlebarView.bounds.height - button.frame.midY
-            report.append("\(label): x=\(button.frame.origin.x) centerFromTop=\(centerFromTop)")
+            let identity = UInt(bitPattern: ObjectIdentifier(button).hashValue) % 100000
+            report.append("\(label): x=\(button.frame.origin.x) centerFromTop=\(centerFromTop) id=\(identity) posts=\(button.postsFrameChangedNotifications)")
         }
         return .success(report.joined(separator: " | "))
     }

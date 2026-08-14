@@ -14,6 +14,21 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 		</dict>
+		<!-- Declaring http and https is what registers the app with macOS as a
+		     browser: without it the app cannot be chosen as the default browser,
+		     and Apple's Web Browser Public Key Credential entitlement lists it as
+		     the first requirement. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Web Site URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>http</string>
+				<string>https</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+		</dict>
 	</array>
 </dict>
 </plist>

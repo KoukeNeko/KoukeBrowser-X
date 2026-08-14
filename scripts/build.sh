@@ -2,11 +2,17 @@
 #
 # Repeatable command-line build for kouke browser.
 #
-# Two things make a plain `xcodebuild` invocation fail on this machine:
+# Three things make a plain `xcodebuild` invocation fail on this machine:
 #   1. xcode-select points at CommandLineTools, so DEVELOPER_DIR must be set
 #      explicitly (changing the global selection would need sudo).
 #   2. The YouTubeKit Swift package only resolves when building via -scheme,
 #      which in turn requires an explicit -derivedDataPath.
+#   3. Automatic signing needs an explicit -destination, and needs permission to
+#      create the provisioning profile the keychain entitlement requires.
+#
+# This build must be signed for real. Skipping signing strips the entitlements,
+# and without keychain-access-groups the app silently falls back to the legacy
+# keychain — so an unsigned build would quietly verify the wrong thing.
 #
 # The build is signed with the real team identity rather than ad-hoc. The
 # data protection keychain — and therefore iCloud sync — needs the
