@@ -289,6 +289,9 @@ class WindowManager {
             defer: false
         )
 
+        // ARC owns this window; without this AppKit also releases it on close(),
+        // causing an over-release crash when an emptied window is closed.
+        window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = NSColor(named: "TitleBarBg")
