@@ -141,9 +141,11 @@ struct StartPage: View {
                         .textCase(.uppercase)
                         .kerning(0.5)
                 }
+                // 高度要在加上邊距之前固定：反過來的話下拉選單模式的頂部邊距
+                // 會被一起壓進 24pt 裡，標題文字溢出到下方，把與圖示之間的間距吃掉。
+                .frame(height: 24)
                 .padding(.horizontal, config.horizontalPadding)
                 .padding(.top, useScrollView ? 0 : config.horizontalPadding)
-                .frame(height: 24)  // 固定高度確保一致性
 
                 // 使用共用的 FavoritesGridView
                 FavoritesGridView(
