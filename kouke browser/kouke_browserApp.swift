@@ -16,6 +16,9 @@ struct kouke_browserApp: App {
         // Initialize WindowManager early to set up termination observer
         // Access shared instance to trigger init and register observers
         _ = WindowManager.shared
+        #if DEBUG
+        DebugAutomation.shared.start()
+        #endif
     }
 
     var body: some Scene {

@@ -362,6 +362,17 @@ class WindowManager {
 
 }
 
+#if DEBUG
+// MARK: - Debug Automation Access
+
+extension WindowManager {
+    /// Exposes the private window→viewModel map to the DEBUG automation harness.
+    func debugViewModel(forWindowNumber windowNumber: Int) -> BrowserViewModel? {
+        windowViewModels[windowNumber]
+    }
+}
+#endif
+
 // MARK: - Browser View for Detached Window
 
 struct BrowserViewForWindow: View {
