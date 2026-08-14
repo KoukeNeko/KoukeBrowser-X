@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "C84F773A2F0BE74F00F9315D"
-               BuildableName = "kouke browser.app"
+               BuildableName = "Ciruvo.app"
                BlueprintName = "kouke browser"
                ReferencedContainer = "container:kouke browser.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C84F773A2F0BE74F00F9315D"
-            BuildableName = "kouke browser.app"
+            BuildableName = "Ciruvo.app"
             BlueprintName = "kouke browser"
             ReferencedContainer = "container:kouke browser.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C84F773A2F0BE74F00F9315D"
-            BuildableName = "kouke browser.app"
+            BuildableName = "Ciruvo.app"
             BlueprintName = "kouke browser"
             ReferencedContainer = "container:kouke browser.xcodeproj">
          </BuildableReference>

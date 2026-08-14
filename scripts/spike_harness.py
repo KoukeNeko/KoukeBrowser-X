@@ -20,8 +20,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-APP_PATH = REPO_ROOT / "build" / "DerivedData" / "Build" / "Products" / "Debug" / "kouke browser.app"
-APP_BINARY = APP_PATH / "Contents" / "MacOS" / "kouke browser"
+APP_PATH = REPO_ROOT / "build" / "DerivedData" / "Build" / "Products" / "Debug" / "Ciruvo.app"
+APP_BINARY = APP_PATH / "Contents" / "MacOS" / "Ciruvo"
 FIXTURES_DIR = REPO_ROOT / "scripts" / "fixtures"
 
 LAUNCH_LOG = Path(tempfile.gettempdir()) / "kouke-harness-launch.log"

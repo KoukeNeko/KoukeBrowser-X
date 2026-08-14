@@ -29,6 +29,8 @@ readonly CONFIGURATION="${1:-Debug}"
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly PROJECT="${PROJECT_ROOT}/kouke browser.xcodeproj"
 readonly SCHEME="kouke browser"
+# The built product is named after the product, not the Xcode target.
+readonly PRODUCT="Ciruvo"
 readonly DERIVED_DATA="${PROJECT_ROOT}/build/DerivedData"
 
 readonly XCODE_APP="/Applications/Xcode-27.0.0-Beta.5.app"
@@ -60,7 +62,7 @@ if xcodebuild \
     > "${build_log}" 2>&1
 then
     echo "BUILD SUCCEEDED"
-    echo "App: ${DERIVED_DATA}/Build/Products/${CONFIGURATION}/${SCHEME}.app"
+    echo "App: ${DERIVED_DATA}/Build/Products/${CONFIGURATION}/${PRODUCT}.app"
     exit 0
 fi
 
