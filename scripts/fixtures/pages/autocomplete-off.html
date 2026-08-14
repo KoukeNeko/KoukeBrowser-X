@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Autocomplete Off Fixture</title>
+  </head>
+  <body>
+    <h1>Sign in</h1>
+    <p>
+      This form asks the browser not to autocomplete it. Password managers
+      deliberately ignore that request: sites used it to stop managers working,
+      which pushed people toward weaker passwords they could type from memory.
+    </p>
+
+    <form id="login-form" autocomplete="off">
+      <label>Username <input name="username" type="text" autocomplete="off" /></label>
+      <label>Password <input name="password" type="password" autocomplete="off" /></label>
+      <button type="submit">Sign in</button>
+    </form>
+  </body>
+</html>

@@ -30,6 +30,9 @@ class BrowserViewModel: ObservableObject {
     // Flag to indicate this viewModel's window should close (set when last tab is detached)
     @Published var isClosing: Bool = false
 
+    /// What the browser is currently asking about autofill, if anything.
+    @Published var autofillPrompt: AutofillPrompt?
+
     // WebView instances managed separately
     private var webViews: [UUID: WKWebView] = [:]
 

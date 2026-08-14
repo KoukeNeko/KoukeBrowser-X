@@ -87,6 +87,8 @@ struct SettingsPageView: View {
                 SearchSettingsContent(settings: settings)
             case .privacy:
                 PrivacySettingsContent(settings: settings)
+            case .passwords:
+                PasswordsSettingsContent(settings: settings)
             case .userScripts:
                 UserScriptsSettingsContent()
             case .experiments:
@@ -108,6 +110,7 @@ private enum SettingsSidebarSection: CaseIterable {
     case tabs
     case search
     case privacy
+    case passwords
     case userScripts
     case experiments
     case advanced
@@ -119,6 +122,7 @@ private enum SettingsSidebarSection: CaseIterable {
         case .tabs: return "Tabs"
         case .search: return "Search"
         case .privacy: return "Privacy"
+        case .passwords: return "Passwords"
         case .userScripts: return "User Scripts"
         case .experiments: return "Experiments"
         case .advanced: return "Advanced"
@@ -132,6 +136,7 @@ private enum SettingsSidebarSection: CaseIterable {
         case .tabs: return "square.on.square"
         case .search: return "magnifyingglass"
         case .privacy: return "hand.raised"
+        case .passwords: return "key"
         case .userScripts: return "doc.text.below.ecg"
         case .experiments: return "flask"
         case .advanced: return "slider.horizontal.3"
@@ -1219,6 +1224,74 @@ private struct AdvancedSettingsContent: View {
 }
 
 // MARK: - Settings Card
+
+private struct PasswordsSettingsContent: View {
+    @ObservedObject var settings: BrowserSettings
+    @StateObject private var credentialManager = CredentialManager.shared
+
+    @State private var showingPasswordsSheet = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsCard(title: "Password Manager") {
+                VStack(alignment: .leading, spacing: 4) {
+                    SettingsPageRow(label: "") {
+                        Toggle("Offer to save and fill passwords", isOn: $settings.enablePasswordManager)
+                    }
+
+                    Text("Passwords are stored in your macOS Keychain. Only secure (https) sites are offered autofill, and a password is never filled until you pick it — so a page cannot lift one from a hidden form.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
+                .font(.system(size: 13))
+            }
+
+            SettingsCard(title: "iCloud Keychain") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Passwords you save here go to your iCloud Keychain, so they appear on your other Macs signed in to the same Apple Account. Turn iCloud Keychain off in System Settings and they stay on this Mac.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("This covers the logins you save in Kouke. Passwords already kept by Safari or the Passwords app are not readable by other browsers, so they will not appear here.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
+                .font(.system(size: 13))
+            }
+
+            SettingsCard(title: "Saved Passwords") {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsPageRow(label: "") {
+                        HStack(spacing: 12) {
+                            Button("Manage Passwords…") {
+                                showingPasswordsSheet = true
+                            }
+
+                            Text(savedCountDescription)
+                                .font(.system(size: 11))
+                                .foregroundColor(Color("TextMuted"))
+                        }
+                    }
+                }
+                .font(.system(size: 13))
+            }
+        }
+        .onAppear { credentialManager.reload() }
+        .sheet(isPresented: $showingPasswordsSheet) {
+            PasswordsView(onDismiss: { showingPasswordsSheet = false })
+        }
+    }
+
+    private var savedCountDescription: String {
+        let count = credentialManager.credentials.count
+        return count == 1 ? "1 saved login" : "\(count) saved logins"
+    }
+}
 
 private struct SettingsCard<Content: View>: View {
     let title: String

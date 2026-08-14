@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SPA Login Fixture</title>
+  </head>
+  <body>
+    <h1>Sign in</h1>
+    <div id="app"></div>
+
+    <script>
+      // The form appears after load, the way a single-page app renders one.
+      // Detection has to cope with a page whose login form did not exist when
+      // the document finished loading.
+      const RENDER_DELAY_MS = 400;
+
+      setTimeout(() => {
+        document.getElementById("app").innerHTML = `
+          <form id="login-form">
+            <label>Username <input name="username" type="text" autocomplete="username" /></label>
+            <label>Password <input name="password" type="password" autocomplete="current-password" /></label>
+            <button type="submit">Sign in</button>
+          </form>
+        `;
+      }, RENDER_DELAY_MS);
+    </script>
+  </body>
+</html>

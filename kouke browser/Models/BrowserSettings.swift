@@ -490,6 +490,14 @@ class BrowserSettings: ObservableObject {
         didSet { defaults.set(promptToInstallUserScripts, forKey: "promptToInstallUserScripts") }
     }
 
+    // Password settings
+    @Published var enablePasswordManager: Bool {
+        didSet {
+            defaults.set(enablePasswordManager, forKey: "enablePasswordManager")
+            NotificationCenter.default.post(name: .passwordManagerSettingChanged, object: enablePasswordManager)
+        }
+    }
+
     private init() {
         // Load saved values or use defaults
         if let themeRaw = defaults.string(forKey: "theme"),
@@ -696,6 +704,9 @@ class BrowserSettings: ObservableObject {
         // Experiments settings
         showYouTubeDislike = defaults.bool(forKey: "showYouTubeDislike")
         enableSponsorBlock = defaults.bool(forKey: "enableSponsorBlock")
+        // Defaults on: a browser that silently ignores logins is more surprising
+        // than one that offers to remember them.
+        enablePasswordManager = defaults.object(forKey: "enablePasswordManager") as? Bool ?? true
         enableDanmaku = defaults.bool(forKey: "enableDanmaku")
 
         // User Scripts settings
@@ -777,4 +788,5 @@ extension Notification.Name {
     static let setCurrentPageAsHomepage = Notification.Name("setCurrentPageAsHomepage")
     static let youTubeDislikeSettingChanged = Notification.Name("youTubeDislikeSettingChanged")
     static let sponsorBlockSettingChanged = Notification.Name("sponsorBlockSettingChanged")
+    static let passwordManagerSettingChanged = Notification.Name("passwordManagerSettingChanged")
 }

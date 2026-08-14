@@ -71,6 +71,16 @@ final class DebugAutomation {
 
         lastExecutedSeq = seq
 
+        if let passwordCommand = PasswordCommand(rawValue: command) {
+            writeResult(seq: seq, outcome: executePasswordCommand(passwordCommand, arguments: json))
+            return
+        }
+
+        if let probeCommand = KeychainProbeCommand(rawValue: command) {
+            writeResult(seq: seq, outcome: executeKeychainProbeCommand(probeCommand, arguments: json))
+            return
+        }
+
         let outcome = execute(command: command, arguments: json)
         writeResult(seq: seq, outcome: outcome)
     }

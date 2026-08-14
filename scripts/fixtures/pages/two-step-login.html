@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Two Step Login Fixture</title>
+  </head>
+  <body>
+    <h1>Sign in</h1>
+
+    <form id="login-form">
+      <div id="username-step">
+        <label>Username <input id="username" name="username" type="text" autocomplete="username" /></label>
+        <button type="button" id="next">Next</button>
+      </div>
+
+      <!-- The password step is revealed only after the username is submitted,
+           the way large providers stage their sign-in. The username field is
+           still present but hidden by then, so the detector has to keep
+           associating it with the password that appears later. -->
+      <div id="password-step" hidden>
+        <label>Password <input id="password" name="password" type="password" autocomplete="current-password" /></label>
+        <button type="submit">Sign in</button>
+      </div>
+    </form>
+
+    <script>
+      document.getElementById("next").addEventListener("click", () => {
+        document.getElementById("username-step").hidden = true;
+        document.getElementById("password-step").hidden = false;
+      });
+    </script>
+  </body>
+</html>

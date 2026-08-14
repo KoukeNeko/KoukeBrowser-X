@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hidden Trap Fixture</title>
+    <style>
+      /* Three ways a credential-stealing page hides a login form while still
+         hoping a password manager will fill it. The detector must refuse all
+         three: a field the user cannot see is a field they cannot have meant
+         to fill. */
+      .clipped {
+        height: 1px;
+        overflow: hidden;
+        position: absolute;
+        width: 1px;
+      }
+      .invisible {
+        visibility: hidden;
+      }
+      .transparent {
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>This page shows no login form</h1>
+    <p>Any fill here would be invisible to the user.</p>
+
+    <form class="clipped">
+      <input type="text" name="username" autocomplete="username" />
+      <input type="password" name="password" autocomplete="current-password" />
+    </form>
+
+    <form class="invisible">
+      <input type="text" name="username2" />
+      <input type="password" name="password2" />
+    </form>
+
+    <form class="transparent">
+      <input type="text" name="username3" />
+      <input type="password" name="password3" />
+    </form>
+
+    <form>
+      <input type="hidden" name="username4" />
+      <input type="password" name="password4" style="display: none" />
+    </form>
+  </body>
+</html>

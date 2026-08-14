@@ -146,6 +146,24 @@ struct BrowserView: View {
         // A translucent page's blur would otherwise sample this fill instead of
         // the desktop.
         .background(showsTranslucentPage ? Color.clear : Color("Bg"))
+        .overlay(alignment: .topTrailing) {
+            if let prompt = viewModel.autofillPrompt, prompt.tabId == viewModel.activeTabId {
+                AutofillPromptView(
+                    prompt: prompt,
+                    onFill: { viewModel.fillCredential($0, in: prompt.tabId) },
+                    onSave: { username, password in
+                        viewModel.saveSubmittedCredential(
+                            host: prompt.host,
+                            username: username,
+                            password: password
+                        )
+                    },
+                    onDismiss: viewModel.dismissAutofillPrompt
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: viewModel.autofillPrompt)
     }
 
     private var historySheet: some View {

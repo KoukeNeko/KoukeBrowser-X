@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Framed Login Fixture</title>
+  </head>
+  <body>
+    <h1>Embedding page</h1>
+    <p>
+      The only login form here lives inside the frame below. The top document
+      has no password field of its own, so autofill must find nothing: filling
+      into a frame would let an embedding page read credentials that belong to
+      the framed site.
+    </p>
+
+    <iframe src="standard-login.html" title="Embedded login" width="360" height="320"></iframe>
+  </body>
+</html>

@@ -67,6 +67,10 @@ private class CertificateFetchDelegate: NSObject, URLSessionDelegate {
 class KoukeWebView: WKWebView {
     weak var contextMenuDelegate: KoukeWebViewContextMenuDelegate?
 
+    /// Owned by the web view rather than the coordinator so it survives a tab
+    /// being moved to another window, which replaces the coordinator.
+    var autofillBridge: AutofillBridge?
+
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
 
@@ -208,6 +212,9 @@ struct WebViewContainer: NSViewRepresentable {
             existingWebView.uiDelegate = context.coordinator
             if let koukeWebView = existingWebView as? KoukeWebView {
                 koukeWebView.contextMenuDelegate = context.coordinator
+                // The tab now belongs to another window's view model, so
+                // autofill prompts have to be raised there instead.
+                koukeWebView.autofillBridge?.delegate = viewModel
             }
 
             // Set up new observers for the new coordinator
@@ -266,6 +273,18 @@ struct WebViewContainer: NSViewRepresentable {
             configuration.userContentController.addUserScript(wkScript)
         }
 
+        // Password autofill runs at document end so the login form exists, and
+        // only in the main frame: filling inside a cross-origin iframe is a
+        // known way to lift credentials from an embedding page.
+        if settings.enablePasswordManager {
+            let autofillScript = WKUserScript(
+                source: PasswordFormDetector.getUserScript(),
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+            configuration.userContentController.addUserScript(autofillScript)
+        }
+
         // Note: Font size is now controlled via pageZoom instead of CSS injection
         // CSS injection of html font-size breaks sites that use rem units
 
@@ -278,6 +297,19 @@ struct WebViewContainer: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.contextMenuDelegate = context.coordinator
+
+        // Registered after creation because the bridge needs the web view it
+        // reads the current origin from. The initial load happens below, so the
+        // channel is in place before any page can post to it.
+        if settings.enablePasswordManager {
+            let bridge = AutofillBridge(webView: webView, tabId: tabId)
+            bridge.delegate = viewModel
+            webView.autofillBridge = bridge
+            webView.configuration.userContentController.add(
+                bridge,
+                name: PasswordFormDetector.messageHandlerName
+            )
+        }
 
         // Enable developer extras for Web Inspector
         webView.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
