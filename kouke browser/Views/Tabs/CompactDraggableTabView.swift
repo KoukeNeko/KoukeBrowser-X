@@ -29,12 +29,13 @@ struct CompactDraggableTabView: NSViewRepresentable {
     weak var viewModel: BrowserViewModel?  // 新增：viewModel 參考
 
     let isDarkTheme: Bool
+    let appearance: ChromeAppearance
 
     func makeNSView(context: Context) -> CompactDraggableTabContainerView {
         NSLog("⚪ makeNSView called - isDarkTheme: %@", isDarkTheme ? "true" : "false")
         let container = CompactDraggableTabContainerView()
         // Initialize with correct theme
-        container.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme)
+        container.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme, appearance: appearance)
 
         container.configure(
             tab: tab,
@@ -65,7 +66,7 @@ struct CompactDraggableTabView: NSViewRepresentable {
 
     func updateNSView(_ nsView: CompactDraggableTabContainerView, context: Context) {
         NSLog("⚪ updateNSView called - isActive: %@, isDarkTheme: %@", isActive ? "true" : "false", isDarkTheme ? "true" : "false")
-        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme)
+        nsView.updateTab(tab, isActive: isActive, showActiveStyle: showActiveStyle, canClose: canClose, canDrag: canDrag, inputURL: inputURL, isDarkTheme: isDarkTheme, appearance: appearance)
     }
 }
 
@@ -440,7 +441,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         dropdownPopover?.updateContent(inputText: inputURL)
     }
 
-    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, isDarkTheme: Bool = false) {
+    func updateTab(_ tab: Tab, isActive: Bool, showActiveStyle: Bool, canClose: Bool, canDrag: Bool, inputURL: String? = nil, isDarkTheme: Bool = false, appearance: ChromeAppearance = .solid) {
         let oldTheme = self.isDarkTheme
         NSLog("🔵 updateTab - isDarkTheme: %@ (was: %@)", isDarkTheme ? "true" : "false", oldTheme ? "true" : "false")
 
@@ -456,6 +457,7 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
             self.inputURL = input
         }
         self.isDarkTheme = isDarkTheme
+        self.chromeAppearance = appearance
 
         // Reset editing state when tab properties or active state changes externally
         if !isActive {
@@ -466,16 +468,41 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
     }
 
     private var isDarkTheme: Bool = false
+    // Not `appearance`: NSView already has a property by that name.
+    private var chromeAppearance: ChromeAppearance = .solid
+
+    /// How much of a tab's fill survives over glass. A compact tab is a
+    /// layer-backed AppKit view with drag machinery attached, so it cannot host
+    /// an NSGlassEffectView the way `ChromeTabBackground` does; a light wash is
+    /// what stands in for the glass capsule.
+    private static let glassFillOpacity: CGFloat = 0.25
 
     // Hardcoded colors to avoid Asset Catalog resolution issues
-    private var tabActiveColor: NSColor {
+    private var selectedFill: NSColor {
         isDarkTheme ? NSColor(red: 0x3A/255.0, green: 0x3A/255.0, blue: 0x3A/255.0, alpha: 1.0)
                     : NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
     }
 
-    private var tabInactiveColor: NSColor {
+    private var unselectedFill: NSColor {
         isDarkTheme ? NSColor(red: 0x1A/255.0, green: 0x1A/255.0, blue: 0x1A/255.0, alpha: 1.0)
                     : NSColor(red: 0xD8/255.0, green: 0xD8/255.0, blue: 0xD8/255.0, alpha: 1.0)
+    }
+
+    /// Only Liquid Glass restyles the tabs; Normal draws them as Solid does,
+    /// because the blur belongs to the band behind them.
+    private var tabActiveColor: NSColor {
+        glassWash(selectedFill)
+    }
+
+    /// Also the hover fill: an inactive compact tab is otherwise clear.
+    private var tabInactiveColor: NSColor {
+        glassWash(unselectedFill)
+    }
+
+    private func glassWash(_ color: NSColor) -> NSColor {
+        chromeAppearance == .liquidGlass
+            ? color.withAlphaComponent(Self.glassFillOpacity)
+            : color
     }
 
     private var borderColor: NSColor {
@@ -500,7 +527,9 @@ class CompactDraggableTabContainerView: NSView, NSDraggingSource, NSTextFieldDel
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        // Update separator color (always, even without tab)
+        // Update separator color (always, even without tab). Glass tabs are
+        // separated by their own edges; a drawn rule cuts across the material.
+        separatorView?.isHidden = chromeAppearance == .liquidGlass
         separatorView?.layer?.backgroundColor = borderColor.cgColor
 
         // Background - only show active style if showActiveStyle is true

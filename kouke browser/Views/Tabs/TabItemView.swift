@@ -16,6 +16,7 @@ import AppKit
 struct TabItemView: View {
     let tab: Tab
     let isActive: Bool
+    let appearance: ChromeAppearance
     let canClose: Bool
     let isBeingDragged: Bool
     let onSelect: () -> Void
@@ -34,7 +35,7 @@ struct TabItemView: View {
 
     var body: some View {
         ZStack {
-            (isActive ? Color("TabActive") : Color("TabInactive"))
+            ChromeTabBackground(appearance: appearance, isActive: isActive)
 
             HStack(spacing: 8) {
                 leadingIcon
@@ -60,9 +61,13 @@ struct TabItemView: View {
         }
         .opacity(isBeingDragged ? 0.5 : 1.0)
         .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Color("Border"))
-                .frame(width: 1)
+            // Glass tabs are separated by their own rounded edges; a drawn rule
+            // between them would cut across the material.
+            if appearance != .liquidGlass {
+                Rectangle()
+                    .fill(Color("Border"))
+                    .frame(width: 1)
+            }
         }
         .overlay { inputLayer }
     }

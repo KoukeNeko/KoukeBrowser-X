@@ -13,6 +13,7 @@ struct StartPage: View {
     var useScrollView: Bool = true  // true = 全頁模式使用 ScrollView，false = 下拉選單不用
     var maxRecentlyClosedTabs: Int = 20  // 最近關閉分頁的最大顯示數量
 
+    @ObservedObject var settings = BrowserSettings.shared
     @ObservedObject var bookmarkManager = BookmarkManager.shared
     @ObservedObject var recentlyClosedManager = RecentlyClosedTabsManager.shared
     @ObservedObject var suggestionsManager = SuggestionsManager.shared
@@ -79,7 +80,10 @@ struct StartPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .background(Color("Bg"))
+            // Only the full-page mode follows the chrome appearance; the
+            // dropdown draws over a page, not over the desktop.
+            .background(ChromePageBackground(appearance: settings.chromeAppearance,
+                                             page: KoukeScheme.blank))
         } else {
             // 下拉選單模式：不用 ScrollView
             VStack(spacing: 0) {

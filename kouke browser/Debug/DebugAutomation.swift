@@ -29,8 +29,19 @@ final class DebugAutomation {
 
     private init() {}
 
+    /// Environment override for the harness directory.
+    ///
+    /// Several unsandboxed debug builds can be running at once, and they would
+    /// otherwise all poll the same path under NSTemporaryDirectory() and race to
+    /// answer each other's commands. A test run sets this to a private directory.
+    private static let directoryEnvironmentKey = "KOUKE_DEBUG_DIR"
+
     private var workingDirectory: URL {
-        URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(Self.directoryName)
+        if let override = ProcessInfo.processInfo.environment[Self.directoryEnvironmentKey],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+        return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(Self.directoryName)
     }
 
     func start() {
@@ -59,6 +70,7 @@ final class DebugAutomation {
         }
 
         lastExecutedSeq = seq
+
         let outcome = execute(command: command, arguments: json)
         writeResult(seq: seq, outcome: outcome)
     }
@@ -71,6 +83,10 @@ final class DebugAutomation {
             return dumpState()
         case "set_style":
             return setTabBarStyle(arguments)
+        case "set_appearance":
+            return setChromeAppearance(arguments)
+        case "set_address_bar_style":
+            return setAddressBarFollowsChromeStyle(arguments)
         case "add_tab":
             return addTab(arguments)
         case "switch_tab":
@@ -142,6 +158,9 @@ final class DebugAutomation {
         let className = String(describing: type(of: view))
         let windowRect = view.convert(view.bounds, to: nil)
         var line = "\(padding)\(className) frame=\(view.frame) inWindow=\(windowRect) hidden=\(view.isHidden) alpha=\(view.alphaValue) flipped=\(view.isFlipped)"
+        if let identifier = view.identifier?.rawValue, !identifier.isEmpty {
+            line += " id=\(identifier)"
+        }
         if let clipView = view as? NSClipView {
             line += " clipBoundsOrigin=\(clipView.bounds.origin)"
         }
@@ -166,7 +185,11 @@ final class DebugAutomation {
                 "title": window.title,
                 "isKeyWindow": window.isKeyWindow,
                 "frame": NSStringFromRect(window.frame),
-                "hasToolbar": window.toolbar != nil
+                "hasToolbar": window.toolbar != nil,
+                // Translucent chrome only works when the window stops painting
+                // an opaque background, so both are part of the assertion.
+                "isOpaque": window.isOpaque,
+                "backgroundAlpha": window.backgroundColor.alphaComponent
             ]
             if let viewModel = WindowManager.shared.debugViewModel(forWindowNumber: number) {
                 info["activeTabId"] = viewModel.activeTabId?.uuidString ?? ""
@@ -178,6 +201,9 @@ final class DebugAutomation {
         }
         let payload: [String: Any] = [
             "tabBarStyle": BrowserSettings.shared.tabBarStyle.rawValue,
+            "chromeAppearance": BrowserSettings.shared.chromeAppearance.rawValue,
+            "addressBarFollowsChromeStyle": BrowserSettings.shared.addressBarFollowsChromeStyle,
+            "glassAvailable": ChromeAppearance.isGlassAvailable,
             "windows": windowsInfo
         ]
         let stateURL = workingDirectory.appendingPathComponent("state.json")
@@ -199,6 +225,23 @@ final class DebugAutomation {
         }
         BrowserSettings.shared.tabBarStyle = style
         return .success("tabBarStyle = \(rawValue)")
+    }
+
+    private func setChromeAppearance(_ arguments: [String: Any]) -> Result<String, Error> {
+        guard let rawValue = arguments["value"] as? String,
+              let appearance = ChromeAppearance(rawValue: rawValue) else {
+            return .failure(DebugAutomationError.badArguments("value must be normal|solid|liquid_glass"))
+        }
+        BrowserSettings.shared.chromeAppearance = appearance
+        return .success("chromeAppearance = \(rawValue)")
+    }
+
+    private func setAddressBarFollowsChromeStyle(_ arguments: [String: Any]) -> Result<String, Error> {
+        guard let enabled = arguments["value"] as? Bool else {
+            return .failure(DebugAutomationError.badArguments("value must be a bool"))
+        }
+        BrowserSettings.shared.addressBarFollowsChromeStyle = enabled
+        return .success("addressBarFollowsChromeStyle = \(enabled)")
     }
 
     private func resolveViewModel(_ arguments: [String: Any]) -> (Int, BrowserViewModel)? {

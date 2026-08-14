@@ -33,9 +33,15 @@ struct SettingsPageView: View {
                     .padding(32)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color("Bg"))
         }
-        .background(Color("Bg"))
+        // One material for the whole page: the sidebar's own tint sits on top
+        // of it, the way a translucent macOS window is built.
+        .background(pageBackground)
+    }
+
+    private var pageBackground: some View {
+        ChromePageBackground(appearance: settings.chromeAppearance,
+                             page: KoukeScheme.settings)
     }
 
     // MARK: - Sidebar
@@ -279,6 +285,47 @@ private struct AppearanceSettingsContent: View {
                     .labelsHidden()
                     .pickerStyle(.segmented)
                     .frame(width: 140)
+                }
+            }
+
+            SettingsCard(title: "Chrome Style") {
+                VStack(alignment: .leading, spacing: 8) {
+                    SettingsPageRow(label: "Style:") {
+                        Picker("", selection: $settings.chromeAppearance) {
+                            ForEach(ChromeAppearance.allCases, id: \.rawValue) { appearance in
+                                Text(appearance.displayName).tag(appearance)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+
+                    Text(settings.chromeAppearance.summary)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Divider().padding(.vertical, 4)
+
+                    SettingsPageRow(label: "") {
+                        Toggle("Apply the style to the address bar",
+                               isOn: $settings.addressBarFollowsChromeStyle)
+                    }
+                    // Nothing to apply or leave out when the chrome is flat.
+                    .disabled(settings.chromeAppearance == .solid)
+
+                    Text("Off keeps the address bar flat while the tab bar stays translucent.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if settings.chromeAppearance == .liquidGlass && !ChromeAppearance.isGlassAvailable {
+                        Text("Liquid Glass needs macOS 26. On this Mac it falls back to Normal.")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color("TextMuted"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 

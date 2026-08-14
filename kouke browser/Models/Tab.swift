@@ -26,6 +26,10 @@ enum KoukeScheme {
     static func isKoukeURL(_ url: String) -> Bool {
         url.hasPrefix(prefix)
     }
+
+    /// Pages that follow the chrome appearance instead of painting an opaque
+    /// background. Web content never does — a site must not be see-through.
+    static let followsChromeAppearance: Set<String> = [blank, settings, about, help]
 }
 
 // MARK: - Tab Model
@@ -80,6 +84,12 @@ struct Tab: Identifiable, Equatable {
     /// Check if this is a kouke:// internal page
     var isKoukePage: Bool {
         url.hasPrefix("kouke://")
+    }
+
+    /// Whether this page may show the desktop through it under a translucent
+    /// chrome appearance.
+    var followsChromeAppearance: Bool {
+        KoukeScheme.followsChromeAppearance.contains(url)
     }
 
     /// Get favicon URL with apple-touch-icon priority

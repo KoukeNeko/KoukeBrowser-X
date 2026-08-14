@@ -34,10 +34,13 @@ struct BrowserView: View {
             .sheet(isPresented: $viewModel.showUserScriptInstallSheet) {
                 UserScriptInstallSheet(viewModel: viewModel)
             }
-            .background(Color("Bg"))
+            // Translucent chrome has to see through to the desktop, so nothing
+            // opaque may sit under it. Each section paints its own background,
+            // so dropping this one leaves no gaps.
+            .background(settings.chromeAppearance.isTranslucent ? Color.clear : Color("Bg"))
             .ignoresSafeArea()
             .preferredColorScheme(settings.theme.colorScheme)
-            .withhostingWindow(theme: settings.theme) { [viewModel, settings] window in
+            .withhostingWindow(theme: settings.theme, appearance: settings.chromeAppearance) { [viewModel, settings] window in
                 configureWindow(window, viewModel: viewModel, settings: settings)
             }
             .onChange(of: viewModel.activeTab?.title) { _, newTitle in
@@ -87,31 +90,25 @@ struct BrowserView: View {
     private var tabBarSection: some View {
         if settings.tabBarStyle == .compact {
             CompactTabBar(viewModel: viewModel)
-                .overlay(
-                    Rectangle()
-                        .fill(Color("Border"))
-                        .frame(height: 1),
-                    alignment: .bottom
-                )
+                .overlay(ChromeDivider(appearance: settings.chromeAppearance), alignment: .bottom)
         } else {
             TabBar(viewModel: viewModel)
-                .overlay(
-                    Rectangle()
-                        .fill(Color("Border"))
-                        .frame(height: 1),
-                    alignment: .bottom
-                )
+                .overlay(ChromeDivider(appearance: settings.chromeAppearance), alignment: .bottom)
         }
     }
 
     private var addressBarSection: some View {
         AddressBar(viewModel: viewModel)
-            .overlay(
-                Rectangle()
-                    .fill(Color("Border"))
-                    .frame(height: 1),
-                alignment: .bottom
-            )
+            // An address bar left out of the style is flat, and a flat band
+            // needs its hairline back.
+            .overlay(ChromeDivider(appearance: settings.addressBarAppearance), alignment: .bottom)
+    }
+
+    /// Whether the visible page paints its own translucent background, in which
+    /// case the content area must not put an opaque fill under it.
+    private var showsTranslucentPage: Bool {
+        settings.chromeAppearance.isTranslucent
+            && viewModel.activeTab?.followsChromeAppearance == true
     }
 
     private var contentArea: some View {
@@ -146,7 +143,9 @@ struct BrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color("Bg"))
+        // A translucent page's blur would otherwise sample this fill instead of
+        // the desktop.
+        .background(showsTranslucentPage ? Color.clear : Color("Bg"))
     }
 
     private var historySheet: some View {
@@ -194,7 +193,7 @@ struct BrowserView: View {
     // MARK: - Helper Methods
 
     private func configureWindow(_ window: NSWindow, viewModel: BrowserViewModel, settings: BrowserSettings) {
-        updateWindowAppearance(window, theme: settings.theme)
+        updateWindowAppearance(window, theme: settings.theme, appearance: settings.chromeAppearance)
 
         window.tabbingMode = .disallowed
         window.makeKeyAndOrderFront(nil)
@@ -206,10 +205,9 @@ struct BrowserView: View {
         WindowChromeConfigurator.shared.setup(for: window)
     }
 
-    private func updateWindowAppearance(_ window: NSWindow, theme: AppTheme) {
+    private func updateWindowAppearance(_ window: NSWindow, theme: AppTheme, appearance: ChromeAppearance) {
         window.appearance = NSAppearance(named: theme == .dark ? .darkAqua : .aqua)
-        window.backgroundColor = NSColor(named: "TitleBarBg")
-        window.invalidateShadow()
+        window.applyChromeBackground(appearance)
     }
 }
 
@@ -417,7 +415,10 @@ struct SettingsModifier: ViewModifier {
 
 struct WindowAccessor: NSViewRepresentable {
     var callback: (NSWindow) -> Void
+    // Stored only so SwiftUI re-runs updateNSView when either changes; that is
+    // what pushes window-level styling to an already-open window.
     var theme: AppTheme
+    var appearance: ChromeAppearance
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -478,8 +479,8 @@ class WindowChromeConfigurator: NSObject {
 }
 
 extension View {
-    func withhostingWindow(theme: AppTheme, _ callback: @escaping (NSWindow) -> Void) -> some View {
-        self.background(WindowAccessor(callback: callback, theme: theme))
+    func withhostingWindow(theme: AppTheme, appearance: ChromeAppearance, _ callback: @escaping (NSWindow) -> Void) -> some View {
+        self.background(WindowAccessor(callback: callback, theme: theme, appearance: appearance))
     }
 }
 

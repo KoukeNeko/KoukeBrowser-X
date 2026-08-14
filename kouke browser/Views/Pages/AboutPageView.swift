@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct AboutPageView: View {
+    @ObservedObject private var settings = BrowserSettings.shared
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
@@ -72,7 +74,8 @@ struct AboutPageView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .background(Color("Bg"))
+        .background(ChromePageBackground(appearance: settings.chromeAppearance,
+                                         page: KoukeScheme.about))
     }
 
     private var webKitVersion: String {

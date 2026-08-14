@@ -10,6 +10,7 @@ import SwiftUI
 // MARK: - Help Page View
 
 struct HelpPageView: View {
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var selectedSection: HelpSidebarSection = .gettingStarted
 
     var body: some View {
@@ -31,9 +32,11 @@ struct HelpPageView: View {
                     .padding(32)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color("Bg"))
         }
-        .background(Color("Bg"))
+        // One material for the whole page: the sidebar's own tint sits on top
+        // of it, the way a translucent macOS window is built.
+        .background(ChromePageBackground(appearance: settings.chromeAppearance,
+                                         page: KoukeScheme.help))
     }
 
     // MARK: - Sidebar

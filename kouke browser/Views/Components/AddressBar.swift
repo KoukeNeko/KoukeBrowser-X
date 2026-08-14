@@ -110,6 +110,7 @@ struct AddressBar: View {
             // Address input container with Safari-style dropdown
             AddressInputContainer(
                 viewModel: viewModel,
+                appearance: settings.addressBarAppearance,
                 securityIcon: securityIcon,
                 securityIconColor: securityIconColor,
                 showingSecurityInfo: $showingSecurityInfo,
@@ -126,7 +127,9 @@ struct AddressBar: View {
         }
         .padding(.horizontal, 6)
         .frame(height: 40)
-        .background(Color("Bg"))
+        .background(ChromeBandBackground(appearance: settings.addressBarAppearance,
+                                         solidColor: Color("Bg"),
+                                         identifier: ChromeMaterialIdentifier.addressBar))
 
         .onReceive(NotificationCenter.default.publisher(for: .addBookmark)) { _ in
             if let tab = viewModel.activeTab, !tab.isSpecialPage {
@@ -325,6 +328,7 @@ struct AddressBar: View {
 struct AddressInputContainer: View {
     @ObservedObject var viewModel: BrowserViewModel
     @ObservedObject var suggestionService = SuggestionService.shared
+    let appearance: ChromeAppearance
     let securityIcon: String
     let securityIconColor: Color
     @Binding var showingSecurityInfo: Bool
@@ -337,6 +341,18 @@ struct AddressInputContainer: View {
     private var showFavorites: Bool {
         // 顯示收藏夾：未輸入任何東西，或剛獲得焦點還沒開始打字
         !isTyping || viewModel.inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Height of the address field, and therefore the radius that makes its
+    /// glass background a capsule.
+    private static let fieldHeight: CGFloat = 28
+
+    @ViewBuilder
+    private var addressFieldBackground: some View {
+        if appearance == .liquidGlass {
+            GlassBackground(cornerRadius: Self.fieldHeight / 2,
+                            identifier: ChromeMaterialIdentifier.addressField)
+        }
     }
 
     var body: some View {
@@ -428,7 +444,10 @@ struct AddressInputContainer: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 28)
+        .frame(height: Self.fieldHeight)
+        // Liquid Glass gives the field its own capsule; the other styles leave
+        // the field flush with the bar, which is how kouke has always drawn it.
+        .background(addressFieldBackground)
         // 追蹤 address bar 的 frame，用於設定 dropdown popover 寬度
         .background(
             GeometryReader { geo in

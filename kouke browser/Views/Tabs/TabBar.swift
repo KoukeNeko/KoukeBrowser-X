@@ -14,6 +14,7 @@ import AppKit
 
 struct TabBar: View {
     @ObservedObject var viewModel: BrowserViewModel
+    @ObservedObject private var settings = BrowserSettings.shared
     @State private var draggedTabId: UUID?
     @State private var isEndDropTargeted: Bool = false
 
@@ -49,7 +50,8 @@ struct TabBar: View {
             }
         }
         .frame(height: Self.barHeight)
-        .background(Color("TitleBarBg"))
+        .background(ChromeBandBackground(appearance: settings.chromeAppearance,
+                                         solidColor: Color("TitleBarBg")))
         .background(
             // Drops that miss every tab append to the end of this window.
             TabDropZoneView(
@@ -69,6 +71,7 @@ struct TabBar: View {
                         TabItemView(
                             tab: tab,
                             isActive: tab.id == viewModel.activeTabId,
+                            appearance: settings.chromeAppearance,
                             canClose: true,
                             isBeingDragged: draggedTabId == tab.id,
                             onSelect: { viewModel.switchToTab(tab.id) },

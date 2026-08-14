@@ -115,10 +115,12 @@ struct CompactTabBar: View {
                                 onSwitchTab: { tabId in viewModel.switchToTab(tabId) },
                                 allTabs: viewModel.tabs,
                                 viewModel: viewModel,
-                                isDarkTheme: isDark
+                                isDarkTheme: isDark,
+                                appearance: settings.chromeAppearance
                             )
                             .frame(width: tabWidth)
-                            .id("\(tab.id)-\(isDark)")  // Force view recreation on theme change
+                            // Force view recreation when the styling inputs change
+                            .id("\(tab.id)-\(isDark)-\(settings.chromeAppearance.rawValue)")
                         }
 
                     }
@@ -210,7 +212,8 @@ struct CompactTabBar: View {
             }
         }
         .frame(height: Self.barHeight)
-        .background(Color("TitleBarBg"))
+        .background(ChromeBandBackground(appearance: settings.chromeAppearance,
+                                         solidColor: Color("TitleBarBg")))
 
         .zIndex(100) // Ensure it sits on top if used in a ZStack
     }

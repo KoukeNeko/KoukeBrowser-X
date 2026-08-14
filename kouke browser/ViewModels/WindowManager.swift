@@ -61,6 +61,13 @@ class WindowManager {
         }
     }
 
+    /// Every open browser window. Window-level settings (chrome transparency)
+    /// have to reach windows that already exist, and this keeps them off
+    /// popovers, panels and the PIP window.
+    var browserWindows: [NSWindow] {
+        NSApp.windows.filter { windowViewModels[$0.windowNumber] != nil }
+    }
+
     /// Register a view model for a window (called from BrowserView)
     func registerViewModel(_ viewModel: BrowserViewModel, for window: NSWindow) {
         let windowNumber = window.windowNumber
@@ -308,7 +315,7 @@ class WindowManager {
         window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = NSColor(named: "TitleBarBg")
+        window.applyChromeBackground(BrowserSettings.shared.chromeAppearance)
         window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 400, height: 300)
 

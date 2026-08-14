@@ -1,0 +1,16 @@
+# Build output (scripts/build.sh writes here)
+build/
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserdatad
+
+# Clang index cache created by a stray "-Xcc" build flag; safe to delete
+-Xcc/
+
+# Python harness caches
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

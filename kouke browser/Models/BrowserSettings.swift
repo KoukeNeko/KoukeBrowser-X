@@ -76,6 +76,47 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
+/// How the browser chrome — tab bar, address bar and the tabs themselves — is
+/// painted. Orthogonal to `AppTheme`, which only picks light or dark colours.
+enum ChromeAppearance: String, CaseIterable {
+    case normal = "normal"
+    case solid = "solid"
+    case liquidGlass = "liquid_glass"
+
+    var displayName: String {
+        switch self {
+        case .normal: return "Normal"
+        case .solid: return "Solid"
+        case .liquidGlass: return "Liquid Glass"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .normal:
+            return "Translucent chrome that blurs whatever is behind the window, the way Safari's toolbar does."
+        case .solid:
+            return "Flat, fully opaque chrome."
+        case .liquidGlass:
+            return "The macOS 26 glass material, with glass tabs and a glass address field."
+        }
+    }
+
+    /// Both translucent styles sample what is behind the *window*, so the window
+    /// itself has to stop painting an opaque background.
+    var isTranslucent: Bool { self != .solid }
+
+    /// Glass supplies its own edge; a hairline under it reads as a seam.
+    var showsChromeDivider: Bool { self != .liquidGlass }
+
+    /// Liquid Glass needs macOS 26. Older systems fall back to Normal's
+    /// material, so the setting stays selectable but is worth explaining.
+    static var isGlassAvailable: Bool {
+        if #available(macOS 26.0, *) { return true }
+        return false
+    }
+}
+
 enum TabBarStyle: String, CaseIterable {
     case normal = "normal"
     case compact = "compact"
@@ -227,6 +268,37 @@ class BrowserSettings: ObservableObject {
         #if os(macOS)
         DispatchQueue.main.async {
             NSApp.appearance = NSAppearance(named: self.theme == .dark ? .darkAqua : .aqua)
+        }
+        #endif
+    }
+
+    @Published var chromeAppearance: ChromeAppearance {
+        didSet {
+            defaults.set(chromeAppearance.rawValue, forKey: "chromeAppearance")
+            applyChromeAppearance()
+        }
+    }
+
+    /// Whether the address bar takes the chrome style too. Off leaves it flat
+    /// while the tab bar stays translucent — a bar that has to be read against
+    /// whatever happens to be behind the window is not to everyone's taste.
+    @Published var addressBarFollowsChromeStyle: Bool {
+        didSet { defaults.set(addressBarFollowsChromeStyle, forKey: "addressBarFollowsChromeStyle") }
+    }
+
+    /// The appearance the address bar draws with, opt-out applied.
+    var addressBarAppearance: ChromeAppearance {
+        addressBarFollowsChromeStyle ? chromeAppearance : .solid
+    }
+
+    /// Window transparency cannot be expressed in the SwiftUI view tree, so it
+    /// has to be pushed to every window that is already open.
+    func applyChromeAppearance() {
+        #if os(macOS)
+        DispatchQueue.main.async {
+            for window in WindowManager.shared.browserWindows {
+                window.applyChromeBackground(self.chromeAppearance)
+            }
         }
         #endif
     }
@@ -426,6 +498,19 @@ class BrowserSettings: ObservableObject {
         } else {
             theme = .dark
         }
+
+        // Defaults to the look kouke already shipped with; adding a setting
+        // should not restyle the app before the user picks something.
+        if let appearanceRaw = defaults.string(forKey: "chromeAppearance"),
+           let loadedAppearance = ChromeAppearance(rawValue: appearanceRaw) {
+            chromeAppearance = loadedAppearance
+        } else {
+            chromeAppearance = .solid
+        }
+        // Defaults on: the style is meant to cover the whole chrome, and
+        // leaving one band out is the exception the setting exists for.
+        addressBarFollowsChromeStyle =
+            defaults.object(forKey: "addressBarFollowsChromeStyle") as? Bool ?? true
 
         let savedFontSize = defaults.integer(forKey: "fontSize")
         fontSize = savedFontSize > 0 ? savedFontSize : 14
