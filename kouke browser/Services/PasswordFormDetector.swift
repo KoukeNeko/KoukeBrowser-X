@@ -170,12 +170,36 @@ enum PasswordFormDetector {
             return { filled: true, submitted: false };
           }
 
+          // Filling and saving ask different questions of the same box, so they
+          // follow different rules. Filling may only ever target a visible
+          // field: writing into a hidden one is exactly how a concealed form
+          // harvests a credential. Saving only reads back what the user typed
+          // themselves, and a staged sign-in hides the username step before it
+          // reveals the password one — refusing to read it there is what left
+          // saved logins labelled with no username at all.
+          function findSubmittedUsername(passwordField) {
+            const visibleField = findUsernameField(passwordField);
+            if (visibleField && visibleField.value) { return visibleField.value; }
+
+            const scope = passwordField.form || document;
+            const filled = [...scope.querySelectorAll(USERNAME_SELECTOR)]
+              .filter(candidate => candidate.value);
+
+            return filled.length > 0 ? filled[filled.length - 1].value : '';
+          }
+
           function reportSubmission() {
             const form = findLoginForm();
             if (!form || !form.passwordField.value) { return; }
+
+            const username = findSubmittedUsername(form.passwordField);
+            // Nothing can be offered back for a login with no username, so
+            // there is nothing worth saving and nothing worth asking about.
+            if (!username) { return; }
+
             post({
               type: 'submit',
-              username: form.usernameField ? form.usernameField.value : '',
+              username: username,
               password: form.passwordField.value
             });
           }

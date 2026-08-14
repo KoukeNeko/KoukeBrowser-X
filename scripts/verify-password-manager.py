@@ -58,6 +58,23 @@ SUBMIT_LOGIN_JS = f"""
 }})()
 """
 
+# Drives the staged fixture the way a real one behaves: the username is entered
+# first, the step that holds it is hidden, and only then is the password sent.
+SUBMIT_TWO_STEP_JS = f"""
+(() => {{
+  const username = document.querySelector('input[autocomplete="username"]');
+  username.value = {json.dumps(HARNESS_USERNAME)};
+  username.dispatchEvent(new Event('input', {{ bubbles: true }}));
+  document.getElementById('next').click();
+  const password = document.querySelector('input[type="password"]');
+  password.value = {json.dumps(FILL_PASSWORD)};
+  password.dispatchEvent(new Event('input', {{ bubbles: true }}));
+  document.getElementById('login-form').dispatchEvent(
+    new Event('submit', {{ bubbles: true, cancelable: true }}));
+  return 'submitted';
+}})()
+"""
+
 TEST_HOST = "example.kouke-test.invalid"
 OTHER_HOST = "other.kouke-test.invalid"
 TEST_USERNAME = "alice@example.com"
@@ -320,6 +337,25 @@ def verify_end_to_end_flow(client, server):
     results.append(check("accepting the offer stores the password",
                          stored.get("password") == FILL_PASSWORD,
                          f"got {stored.get('password')!r}"))
+
+    # A staged sign-in hides the username box before the password is sent. The
+    # username is still the user's own input, and a login saved without one can
+    # never be offered back, so losing it here is the difference between a
+    # usable entry and a useless one.
+    print(f"\n{YELLOW}11. End-to-end: save from a two-step sign-in{RESET}")
+    client.send("credential_reset_test_data")
+    client.send("load_page", url=f"{server.base_url}/two-step-login.html", timeout=60)
+    client.send("eval_js", timeout=30, script=SUBMIT_TWO_STEP_JS)
+    staged_prompt = wait_until(
+        lambda: json.loads(client.send("autofill_prompt", timeout=30)),
+        lambda value: value.get("kind") == "save",
+    )
+    results.append(check("save offer raised for a staged sign-in",
+                         staged_prompt.get("kind") == "save",
+                         f"kind={staged_prompt.get('kind')}"))
+    results.append(check("the hidden username step still names the user",
+                         staged_prompt.get("username") == HARNESS_USERNAME,
+                         f"got {staged_prompt.get('username')!r}"))
 
     client.send("credential_reset_test_data")
     return results
