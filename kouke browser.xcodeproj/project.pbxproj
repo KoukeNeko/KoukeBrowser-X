@@ -11,7 +11,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C84F773B2F0BE74F00F9315D /* kouke browser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "kouke browser.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C84F773B2F0BE74F00F9315D /* kouke browser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "kouke browser.app"; path = Ciruvo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */

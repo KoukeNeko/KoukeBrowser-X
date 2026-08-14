@@ -14,3 +14,8 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Signing and notarisation credentials. Never commit these.
+scripts/env
+scripts/.env
+*.p8
