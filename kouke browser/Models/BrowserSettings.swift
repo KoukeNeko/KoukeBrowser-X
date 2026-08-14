@@ -78,6 +78,36 @@ enum AppTheme: String, CaseIterable {
 
 /// How the browser chrome — tab bar, address bar and the tabs themselves — is
 /// painted. Orthogonal to `AppTheme`, which only picks light or dark colours.
+/// Which variant of the app icon the Dock shows.
+enum AppIconAppearance: String, CaseIterable {
+    case auto = "auto"
+    case light = "light"
+    case dark = "dark"
+    case mono = "mono"
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        case .mono: return "Mono"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .auto:
+            return "Follows the system appearance."
+        case .light:
+            return "Always the light artwork."
+        case .dark:
+            return "Always the dark artwork."
+        case .mono:
+            return "The light artwork with its colour removed."
+        }
+    }
+}
+
 enum ChromeAppearance: String, CaseIterable {
     case normal = "normal"
     case solid = "solid"
@@ -260,7 +290,20 @@ class BrowserSettings: ObservableObject {
         didSet {
             defaults.set(theme.rawValue, forKey: "theme")
             applyTheme()
+            // Auto tracks the system appearance, which the theme drives.
+            applyAppIconAppearance()
         }
+    }
+
+    @Published var appIconAppearance: AppIconAppearance {
+        didSet {
+            defaults.set(appIconAppearance.rawValue, forKey: "appIconAppearance")
+            applyAppIconAppearance()
+        }
+    }
+
+    func applyAppIconAppearance() {
+        AppIconService.apply(appIconAppearance)
     }
 
     /// Apply theme to the entire app
@@ -514,6 +557,13 @@ class BrowserSettings: ObservableObject {
             chromeAppearance = loadedAppearance
         } else {
             chromeAppearance = .solid
+        }
+        // Matching the system is the least surprising default for an icon.
+        if let iconRaw = defaults.string(forKey: "appIconAppearance"),
+           let loadedIcon = AppIconAppearance(rawValue: iconRaw) {
+            appIconAppearance = loadedIcon
+        } else {
+            appIconAppearance = .auto
         }
         // Defaults on: the style is meant to cover the whole chrome, and
         // leaving one band out is the exception the setting exists for.

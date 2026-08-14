@@ -159,6 +159,8 @@ final class DebugAutomation {
             return reportGestureRecognizers(arguments)
         case "window_frame":
             return setWindowFrame(arguments)
+        case "app_icon":
+            return reportAppIcon(arguments)
         default:
             return .failure(DebugAutomationError.unknownCommand(command))
         }
@@ -178,6 +180,36 @@ final class DebugAutomation {
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]) {
             try? data.write(to: resultURL)
         }
+    }
+
+    // MARK: - App Icon
+
+    /// Optionally switches the icon appearance, then dumps whatever the Dock
+    /// would draw. Reading `NSApp.applicationIconImage` is the point: the icon
+    /// on disk can be correct while the running app still shows a placeholder.
+    private func reportAppIcon(_ arguments: [String: Any]) -> Result<String, Error> {
+        if let value = arguments["value"] as? String {
+            guard let appearance = AppIconAppearance(rawValue: value) else {
+                return .failure(DebugAutomationError.badArguments("unknown icon appearance \(value)"))
+            }
+            BrowserSettings.shared.appIconAppearance = appearance
+        }
+
+        let icon = NSApp.applicationIconImage
+        guard let tiff = icon?.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else {
+            return .failure(DebugAutomationError.badArguments("no application icon image"))
+        }
+
+        let iconURL = workingDirectory.appendingPathComponent("app-icon.png")
+        do {
+            try png.write(to: iconURL)
+        } catch {
+            return .failure(error)
+        }
+
+        return .success("appearance=\(BrowserSettings.shared.appIconAppearance.rawValue) size=\(bitmap.pixelsWide)x\(bitmap.pixelsHigh)")
     }
 
     // MARK: - Snapshot & Hierarchy

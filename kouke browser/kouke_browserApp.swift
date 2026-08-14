@@ -26,6 +26,10 @@ struct kouke_browserApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(settings.theme.colorScheme)
+                // Not in init(): NSApplication does not exist yet there, and
+                // the Dock draws the running app's icon from NSApp rather than
+                // from the bundle.
+                .onAppear { settings.applyAppIconAppearance() }
                 .handlesExternalEvents(preferring: Set(arrayLiteral: "main"), allowing: Set(arrayLiteral: "*"))
                 .onOpenURL { url in
                     handleIncomingURL(url)

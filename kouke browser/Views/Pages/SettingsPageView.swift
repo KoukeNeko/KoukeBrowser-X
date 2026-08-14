@@ -293,6 +293,26 @@ private struct AppearanceSettingsContent: View {
                 }
             }
 
+            SettingsCard(title: "App Icon") {
+                VStack(alignment: .leading, spacing: 8) {
+                    SettingsPageRow(label: "Icon:") {
+                        Picker("", selection: $settings.appIconAppearance) {
+                            ForEach(AppIconAppearance.allCases, id: \.rawValue) { appearance in
+                                Text(appearance.displayName).tag(appearance)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+
+                    Text(settings.appIconAppearance.summary)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color("TextMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             SettingsCard(title: "Chrome Style") {
                 VStack(alignment: .leading, spacing: 8) {
                     SettingsPageRow(label: "Style:") {
